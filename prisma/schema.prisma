@@ -1,0 +1,51 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Event {
+  id         String     @id @default(cuid())
+  source     String
+  eventType  String
+  occurredAt DateTime
+  externalId String?
+  payload    Json
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  dayEvents  DayEvent[]
+
+  @@index([source, occurredAt])
+  @@unique([source, externalId])
+}
+
+model Cursor {
+  id        String   @id @default(cuid())
+  source    String   @unique
+  cursor    String?
+  updatedAt DateTime @updatedAt
+}
+
+model Day {
+  date         DateTime   @id
+  mood         String?
+  note         String?
+  highlights   String?
+  privacyLevel String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  dayEvents    DayEvent[]
+}
+
+model DayEvent {
+  id       String   @id @default(cuid())
+  dayDate  DateTime
+  eventId  String
+  day      Day      @relation(fields: [dayDate], references: [date])
+  event    Event    @relation(fields: [eventId], references: [id])
+
+  @@unique([dayDate, eventId])
+}

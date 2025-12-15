@@ -1,0 +1,26 @@
+{
+  "name": "journal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "api": "node src/api/server.js",
+    "web": "node src/web/server.js",
+    "collector:run": "node src/collector/run.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:reset": "prisma migrate reset --force",
+    "test-db": "node scripts/test-db.js",
+    "reset-db": "node scripts/reset-db.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@prisma/client": "^5.22.0",
+    "dotenv": "^16.5.0",
+    "fastify": "^5.0.0",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "prisma": "^5.22.0"
+  }
+}
