@@ -2,8 +2,8 @@ import Fastify from 'fastify';
 
 const server = Fastify({ logger: true });
 
-server.get('/', async () => ({
-  html: `
+server.get('/', async (request, reply) => {
+  const html = `
     <!doctype html>
     <html lang="en">
       <head>
@@ -21,7 +21,9 @@ server.get('/', async () => ({
         <p>Connect an API, collector, and digest generator to see your timeline here.</p>
         <p>Use <code>/api</code> endpoints for the data layer and systemd timers for collectors.</p>
       </body>
-    </html>`
+    </html>`;
+
+  reply.type('text/html').send(html);
 });
 
 const startServer = async () => {
