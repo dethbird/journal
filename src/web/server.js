@@ -1,35 +1,37 @@
 import Fastify from 'fastify';
+import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import apiRoutes from '../api/routes.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const staticRoot = path.join(__dirname, 'public');
 
 const server = Fastify({ logger: true });
 
-server.get('/', async (request, reply) => {
-  const html = `
-    <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8" />
-        <title>Journal UI</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <style>
-          body { font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; }
-          h1 { color: #38bdf8; }
-          p { max-width: 40rem; }
-        </style>
-      </head>
-      <body>
-        <h1>Journal – Evidence First</h1>
-        <p>Connect an API, collector, and digest generator to see your timeline here.</p>
-        <p>Use <code>/api</code> endpoints for the data layer and systemd timers for collectors.</p>
-      </body>
-    </html>`;
+await server.register(cors, { origin: true });
+await server.register(apiRoutes, { prefix: '/api' });
 
-  reply.type('text/html').send(html);
+await server.register(fastifyStatic, {
+  root: staticRoot,
+  prefix: '/',
+  decorateReply: true,
+  list: false
+});
+
+server.setNotFoundHandler((request, reply) => {
+  if (request.raw.method === 'GET') {
+    return reply.type('text/html').sendFile('index.html');
+  }
+  reply.code(404).send({ error: 'Not Found' });
 });
 
 const startServer = async () => {
-  const port = Number(process.env.WEB_PORT) || 4200;
+  const port = Number(process.env.WEB_PORT || process.env.API_PORT) || 4200;
   await server.listen({ port });
-  server.log.info(`Web UI listening on ${port}`);
+  server.log.info(`Server listening on ${port}`);
 };
 
 if (process.env.NODE_ENV !== 'test') {
