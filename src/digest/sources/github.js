@@ -1,6 +1,10 @@
 import { registerDigest } from '../registry.js';
 
 const DIVIDER = '────────────────────';
+// Display caps
+const MAX_REPOS_DISPLAY = Number(process.env.DIGEST_GH_MAX_REPOS ?? 6);
+const MAX_COMMIT_LINES = Number(process.env.DIGEST_GH_MAX_COMMITS ?? 5);
+const MAX_SUBJECTS = Number(process.env.DIGEST_GH_MAX_SUBJECTS ?? 4);
 
 const getEnrichment = (event, type) =>
   event.enrichments?.find((en) => en.enrichmentType === type)?.data ?? null;
@@ -39,18 +43,31 @@ const buildCodeSection = (events) => {
 
     const commitCount = enrichment?.commit_count ?? raw.size ?? raw.commits?.length ?? 1;
     const subjects = Array.isArray(enrichment?.commit_subjects)
-      ? enrichment.commit_subjects.filter(Boolean).slice(0, 2)
+      ? enrichment.commit_subjects.filter(Boolean).slice(0, MAX_SUBJECTS)
+      : [];
+    const commitDetails = Array.isArray(enrichment?.commits)
+      ? enrichment.commits
+          .map((c) => ({ short: c.short_sha ?? (c.sha ? c.sha.slice(0, 7) : null), message: c.message ?? null }))
+          .filter((c) => c.message)
       : [];
 
     const key = `${repo}::${branch ?? ''}`;
     if (!groups.has(key)) {
-      groups.set(key, { repo, branch, commits: 0, subjects: [] });
+      groups.set(key, { repo, branch, commits: 0, subjects: [], commitDetails: new Map() });
     }
 
     const entry = groups.get(key);
     entry.commits += commitCount || 1;
-    if (entry.subjects.length < 2) {
-      entry.subjects = [...entry.subjects, ...subjects].slice(0, 2);
+
+    if (entry.subjects.length < 4) {
+      entry.subjects = [...entry.subjects, ...subjects].slice(0, 4);
+    }
+
+    for (const detail of commitDetails) {
+      const keySha = detail.short ?? detail.message;
+      if (keySha && !entry.commitDetails.has(keySha)) {
+        entry.commitDetails.set(keySha, detail);
+      }
     }
   }
 
@@ -64,7 +81,8 @@ const buildCodeSection = (events) => {
   lines.push('Code');
 
   const sorted = [...groups.values()].sort((a, b) => b.commits - a.commits || a.repo.localeCompare(b.repo));
-  for (const group of sorted) {
+  const top = sorted.slice(0, MAX_REPOS_DISPLAY);
+  for (const group of top) {
     stats.commits += group.commits;
     if (group.repo) {
       stats.repos.add(group.repo);
@@ -72,8 +90,16 @@ const buildCodeSection = (events) => {
 
     const branchPart = group.branch ? ` (${group.branch})` : '';
     lines.push(`• ${group.repo}${branchPart}: ${group.commits} commits`);
-    for (const subject of group.subjects) {
-      lines.push(`  – ${subject}`);
+
+    const commitDetails = [...group.commitDetails.values()].slice(0, MAX_COMMIT_LINES);
+    if (commitDetails.length) {
+      for (const detail of commitDetails) {
+        lines.push(`  – ${detail.short ? `(${detail.short}) ` : ''}${detail.message}`);
+      }
+    } else {
+      for (const subject of group.subjects) {
+        lines.push(`  – ${subject}`);
+      }
     }
   }
 

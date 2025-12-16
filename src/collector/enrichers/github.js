@@ -60,6 +60,7 @@ const buildPush = async (event, octokit) => {
     head,
     commit_count: null,
     commit_subjects: [],
+    commits: [],
     compare_url: null,
     stats: null,
     status: 'ok_head_only',
@@ -77,6 +78,14 @@ const buildPush = async (event, octokit) => {
         .filter(Boolean)
         .slice(0, 3);
 
+      const commitDetails = commits.slice(0, 10).map((c) => ({
+        sha: c.sha,
+        short_sha: c.sha ? c.sha.slice(0, 7) : null,
+        message: c.commit?.message?.split('\n')[0] || null,
+        author: c.commit?.author?.name ?? c.author?.login ?? null,
+        url: c.html_url ?? null,
+      }));
+
       const stats = res.data?.files
         ? {
             additions: res.data.files.reduce((acc, f) => acc + (f.additions ?? 0), 0),
@@ -91,6 +100,7 @@ const buildPush = async (event, octokit) => {
           ...base,
           commit_count: commits.length,
           commit_subjects: subjects,
+          commits: commitDetails.filter((c) => c.message),
           compare_url: res.data?.html_url ?? base.compare_url,
           stats,
           status: 'ok_compare',
@@ -106,12 +116,20 @@ const buildPush = async (event, octokit) => {
     try {
       const commit = await octokit.rest.repos.getCommit({ owner, repo, ref: head });
       const subject = commit.data?.commit?.message?.split('\n')[0] ?? null;
+      const commitEntry = {
+        sha: commit.data?.sha ?? null,
+        short_sha: commit.data?.sha ? commit.data.sha.slice(0, 7) : null,
+        message: subject,
+        author: commit.data?.commit?.author?.name ?? commit.data?.author?.login ?? null,
+        url: commit.data?.html_url ?? null,
+      };
       return {
         enrichmentType: 'github_push_v1',
         data: {
           ...base,
           commit_count: subject ? 1 : null,
           commit_subjects: subject ? [subject] : [],
+          commits: subject ? [commitEntry] : [],
           status: 'ok_head_only',
         },
       };
