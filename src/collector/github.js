@@ -1,35 +1,14 @@
 import { Octokit } from '@octokit/rest';
 import { registerCollector } from './runner.js';
+import { resolveGitHubAccessToken } from './githubAuth.js';
 
 const source = 'github';
-const token = process.env.GITHUB_TOKEN;
 const activityMode = process.env.GITHUB_ACTIVITY_MODE ?? 'authenticated_events';
 const username = process.env.GITHUB_ACTIVITY_USERNAME;
 const MAX_PAGES = 6;
 
-const octokit = token ? new Octokit({ auth: token }) : null;
-
 const warnMissingConfig = () => {
-  console.warn('GitHub collector missing configuration (set GITHUB_TOKEN)');
-};
-
-const listPage = async (page) => {
-  if (!octokit) {
-    throw new Error('Octokit is not initialized');
-  }
-
-  if (activityMode === 'authenticated_events') {
-    return octokit.rest.activity.listEventsForAuthenticatedUser({ per_page: 100, page });
-  }
-
-  if (activityMode === 'user_events') {
-    if (!username) {
-      throw new Error('GITHUB_ACTIVITY_USERNAME is required for user_events mode');
-    }
-    return octokit.rest.activity.listEventsForUser({ username, per_page: 100, page });
-  }
-
-  throw new Error(`Unsupported GitHub activity mode: ${activityMode}`);
+  console.warn('GitHub collector missing OAuth access token (lookups expect OAuthToken entries).');
 };
 
 const mapEvent = (event) => ({
@@ -47,15 +26,32 @@ const mapEvent = (event) => ({
 });
 
 const collect = async (cursor) => {
-  if (!octokit || !token) {
+  const token = await resolveGitHubAccessToken();
+  if (!token) {
     warnMissingConfig();
     return { items: [], nextCursor: cursor };
   }
 
+  const octokit = new Octokit({ auth: token });
   const items = [];
   let continuePaging = true;
   let page = 1;
   let newestId = null;
+
+  const listPage = async (pageNumber) => {
+    if (activityMode === 'authenticated_events') {
+      return octokit.rest.activity.listEventsForAuthenticatedUser({ per_page: 100, page: pageNumber });
+    }
+
+    if (activityMode === 'user_events') {
+      if (!username) {
+        throw new Error('GITHUB_ACTIVITY_USERNAME is required when using user_events mode');
+      }
+      return octokit.rest.activity.listEventsForUser({ username, per_page: 100, page: pageNumber });
+    }
+
+    throw new Error(`Unsupported GitHub activity mode: ${activityMode}`);
+  };
 
   while (continuePaging && page <= MAX_PAGES) {
     const response = await listPage(page);
@@ -81,10 +77,6 @@ const collect = async (cursor) => {
     }
 
     page += 1;
-  }
-
-  if (items.length === 0) {
-    return { items: [], nextCursor: newestId ?? cursor };
   }
 
   return { items, nextCursor: newestId ?? cursor };
