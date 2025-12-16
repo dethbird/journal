@@ -2,80 +2,92 @@ import { Octokit } from '@octokit/rest';
 import { registerCollector } from './runner.js';
 
 const source = 'github';
-const owner = process.env.GITHUB_OWNER;
-const repo = process.env.GITHUB_REPO;
-const branch = process.env.GITHUB_BRANCH ?? 'main';
 const token = process.env.GITHUB_TOKEN;
+const activityMode = process.env.GITHUB_ACTIVITY_MODE ?? 'authenticated_events';
+const username = process.env.GITHUB_ACTIVITY_USERNAME;
+const MAX_PAGES = 6;
 
 const octokit = token ? new Octokit({ auth: token }) : null;
 
-const defaultSince = () => new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString();
-
-const formatCommit = (commit) => {
-  const commitDate = commit.commit?.committer?.date ?? commit.commit?.author?.date;
-  return {
-    eventType: 'commit',
-    occurredAt: commitDate ?? new Date().toISOString(),
-    externalId: commit.sha,
-    payload: {
-      message: commit.commit?.message,
-      url: commit.html_url,
-      author: {
-        name: commit.commit?.author?.name,
-        email: commit.commit?.author?.email,
-        username: commit.author?.login,
-        avatarUrl: commit.author?.avatar_url,
-      },
-      committer: {
-        name: commit.commit?.committer?.name,
-        email: commit.commit?.committer?.email,
-      },
-      repo: owner && repo ? `${owner}/${repo}` : null,
-      raw: commit,
-    },
-  };
+const warnMissingConfig = () => {
+  console.warn('GitHub collector missing configuration (set GITHUB_TOKEN)');
 };
 
+const listPage = async (page) => {
+  if (!octokit) {
+    throw new Error('Octokit is not initialized');
+  }
+
+  if (activityMode === 'authenticated_events') {
+    return octokit.rest.activity.listEventsForAuthenticatedUser({ per_page: 100, page });
+  }
+
+  if (activityMode === 'user_events') {
+    if (!username) {
+      throw new Error('GITHUB_ACTIVITY_USERNAME is required for user_events mode');
+    }
+    return octokit.rest.activity.listEventsForUser({ username, per_page: 100, page });
+  }
+
+  throw new Error(`Unsupported GitHub activity mode: ${activityMode}`);
+};
+
+const mapEvent = (event) => ({
+  eventType: event.type,
+  occurredAt: event.created_at,
+  externalId: event.id,
+  payload: {
+    type: event.type,
+    repo: event.repo,
+    actor: event.actor,
+    public: event.public,
+    raw: event.payload,
+    url: event.url,
+  },
+});
+
 const collect = async (cursor) => {
-  if (!owner || !repo || !octokit) {
-    console.warn('GitHub collector missing configuration (set GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO)');
+  if (!octokit || !token) {
+    warnMissingConfig();
     return { items: [], nextCursor: cursor };
   }
 
-  const since = cursor ?? defaultSince();
-  const commits = [];
+  const items = [];
+  let continuePaging = true;
   let page = 1;
+  let newestId = null;
 
-  while (true) {
-    const response = await octokit.rest.repos.listCommits({
-      owner,
-      repo,
-      sha: branch,
-      since,
-      per_page: 100,
-      page,
-    });
-
+  while (continuePaging && page <= MAX_PAGES) {
+    const response = await listPage(page);
     if (response.data.length === 0) {
       break;
     }
 
-    commits.push(...response.data);
-    if (response.data.length < 100) {
+    if (!newestId) {
+      newestId = response.data[0]?.id ?? null;
+    }
+
+    for (const event of response.data) {
+      if (event.id === cursor) {
+        continuePaging = false;
+        break;
+      }
+
+      items.push(mapEvent(event));
+    }
+
+    if (!continuePaging || response.data.length < 100) {
       break;
     }
+
     page += 1;
   }
 
-  if (commits.length === 0) {
-    return { items: [], nextCursor: cursor };
+  if (items.length === 0) {
+    return { items: [], nextCursor: newestId ?? cursor };
   }
 
-  const items = commits.map(formatCommit);
-  const newest = commits[0];
-  const nextCursor = newest?.commit?.committer?.date ?? newest?.commit?.author?.date ?? new Date().toISOString();
-
-  return { items, nextCursor };
+  return { items, nextCursor: newestId ?? cursor };
 };
 
 registerCollector({ source, collect });
