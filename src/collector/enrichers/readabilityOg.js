@@ -61,9 +61,7 @@ const chooseImage = (meta, article) => meta.ogImage || meta.twitterImage || firs
 
 export const enrichLink = async (url) => {
   try {
-    console.debug(`enrichLink: start ${url}`);
     const { html, finalUrl, status } = await fetchHtml(url);
-    console.debug(`enrichLink: fetched ${finalUrl} (status=${status})`);
     const dom = new JSDOM(html, { url: finalUrl });
     const meta = extractMeta(dom);
 
@@ -71,9 +69,8 @@ export const enrichLink = async (url) => {
     try {
       const reader = new Readability(dom.window.document);
       article = reader.parse();
-      console.debug(`enrichLink: readability parsed for ${finalUrl}`);
     } catch (err) {
-      console.warn(`enrichLink: readability parse failed for ${finalUrl}: ${err?.message}`);
+      console.warn(`readability parse failed for ${finalUrl}: ${err?.message}`);
     }
 
     const title = article?.title || meta.ogTitle || meta.twitterTitle || dom.window.document.title || null;
@@ -100,7 +97,6 @@ export const enrichLink = async (url) => {
       publishedAt,
       httpStatus: status,
     };
-    console.debug(`enrichLink: done ${finalUrl}`);
     return result;
   } catch (error) {
     return {
