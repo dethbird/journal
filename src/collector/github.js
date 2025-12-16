@@ -37,10 +37,19 @@ const collect = async (cursor) => {
   let continuePaging = true;
   let page = 1;
   let newestId = null;
+  let resolvedUsername = username;
+
+  if (activityMode === 'authenticated_events' && !resolvedUsername) {
+    const authUser = await octokit.rest.users.getAuthenticated();
+    resolvedUsername = authUser.data.login;
+  }
 
   const listPage = async (pageNumber) => {
     if (activityMode === 'authenticated_events') {
-      return octokit.rest.activity.listEventsForAuthenticatedUser({ per_page: 100, page: pageNumber });
+      if (!resolvedUsername) {
+        throw new Error('Authenticated GitHub username could not be resolved');
+      }
+      return octokit.rest.activity.listEventsForAuthenticatedUser({ username: resolvedUsername, per_page: 100, page: pageNumber });
     }
 
     if (activityMode === 'user_events') {
