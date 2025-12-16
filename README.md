@@ -6,7 +6,7 @@ This repo now holds the scaffolding for three services you sketched: \`api\`, \`
 
 - `src/api/server.js`: Fastify-based API surface exposing health checks plus event/day read routes.
 - `src/collector/run.js`: Collector runner that loads pluggable connectors (GitHub, IMAP, etc.), saves normalized events in `events`, and maintains per-source cursors.
-- `src/web/server.js`: Lightweight UI shell for the calendar/day view that will eventually consume the API digest.
+- `src/web/server.js`: Unified Fastify server that serves the API and the built React UI from `src/web/public`.
 - `src/db/client.js`: Singleton Prisma client shared across layers.
 
 ### Postgres schema
@@ -17,6 +17,10 @@ The schema is defined in `prisma/schema.prisma` and mirrors the suggested tables
 - `Cursor`: stores the latest cursor string per collector.
 - `Day`: human-facing journal entries with mood/note/highlights metadata.
 - `DayEvent`: join table pinning events as evidence for a given date.
+- `User`: app user record (display/email metadata).
+- `AuthIdentity`: login identity (provider + provider_subject) linked to a user.
+- `ConnectedAccount`: per-user linked data sources (GitHub, Google, etc.).
+- `OAuthToken`: tokens for connected accounts (access/refresh/expiry/scope).
 
 Prisma is the query layer because it balances structured querying with JSON flexibility, plus you get migrations, TypeScript typings, and easy resets. You can still point your DB client (psql, TablePlus, DBeaver) at the same `DATABASE_URL` to inspect or mutate the tables directly.
 

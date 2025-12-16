@@ -137,3 +137,11 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Prisma generated/runtime artifacts (do not ignore schema or committed migration sources)
+.prisma/
+node_modules/.prisma/
+prisma/dev.db
+prisma/.migration_lock
+prisma/migrations/*/*.sql
+prisma/migrations/*/*.lock

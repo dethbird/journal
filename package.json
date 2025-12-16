@@ -4,8 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "api": "node src/web/server.js",
-    "web": "node src/web/server.js",
     "start": "node src/web/server.js",
     "ui:dev": "vite --config src/ui/vite.config.js",
     "ui:build": "vite build --config src/ui/vite.config.js",

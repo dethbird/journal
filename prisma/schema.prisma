@@ -49,3 +49,57 @@ model DayEvent {
 
   @@unique([dayDate, eventId])
 }
+
+model User {
+  id                String             @id @default(cuid())
+  email             String?            @unique
+  displayName       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  authIdentities    AuthIdentity[]
+  connectedAccounts ConnectedAccount[]
+}
+
+model AuthIdentity {
+  id              String    @id @default(cuid())
+  userId          String
+  provider        String
+  providerSubject String
+  email           String?
+  createdAt       DateTime  @default(now())
+  lastLoginAt     DateTime?
+  user            User      @relation(fields: [userId], references: [id])
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+}
+
+model ConnectedAccount {
+  id                 String       @id @default(cuid())
+  userId             String
+  provider           String
+  providerAccountId  String
+  displayName        String?
+  scopes             String?
+  status             String       @default("active")
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  user               User         @relation(fields: [userId], references: [id])
+  oauthTokens        OAuthToken[]
+
+  @@unique([userId, provider, providerAccountId])
+  @@index([userId, provider])
+}
+
+model OAuthToken {
+  id                  String            @id @default(cuid())
+  connectedAccountId  String
+  accessToken         String
+  refreshToken        String?
+  expiresAt           DateTime?
+  tokenType           String?
+  scope               String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  connectedAccount    ConnectedAccount  @relation(fields: [connectedAccountId], references: [id])
+}
