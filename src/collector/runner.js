@@ -67,9 +67,9 @@ export const runCollectorCycle = async () => {
 
           if (item.enrichment) {
             await prisma.eventEnrichment.upsert({
-              where: { eventId_source: { eventId: createdEvent.id, source } },
-              update: { data: item.enrichment },
-              create: { eventId: createdEvent.id, source, data: item.enrichment },
+              where: { eventId_enrichmentType: { eventId: createdEvent.id, enrichmentType: item.enrichment.enrichmentType } },
+              update: { data: item.enrichment.data, source },
+              create: { eventId: createdEvent.id, source, enrichmentType: item.enrichment.enrichmentType, data: item.enrichment.data },
             });
           }
         }

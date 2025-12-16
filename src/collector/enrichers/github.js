@@ -1,55 +1,219 @@
-const extractBranch = (payload) => payload?.raw?.ref ?? payload?.branch ?? null;
-const extractRepoName = (payload) => payload?.repo?.name ?? payload?.repoName ?? null;
+const extractRepoName = (event) => {
+  const payload = event.payload ?? {};
+  const raw = payload.raw ?? {};
+  return (
+    event.repo?.name ??
+    payload.repo?.name ??
+    payload.repo?.full_name ??
+    raw.repo?.full_name ??
+    raw.repo?.name ??
+    payload.repoName ??
+    null
+  );
+};
 
-const buildPush = (payload) => ({
-  type: 'PushEvent',
-  repo: extractRepoName(payload),
-  branch: extractBranch(payload),
-  before: payload?.raw?.before ?? null,
-  head: payload?.raw?.head ?? payload?.head ?? null,
-});
+const extractBranch = (raw, payload) => {
+  const ref = raw?.ref ?? payload?.ref ?? payload?.branch ?? null;
+  if (typeof ref === 'string' && ref.startsWith('refs/heads/')) {
+    return ref.slice('refs/heads/'.length);
+  }
+  return payload?.branch ?? raw?.branch ?? null;
+};
 
-const buildPullRequest = (payload) => ({
-  type: 'PullRequestEvent',
-  repo: extractRepoName(payload),
-  action: payload?.raw?.action ?? null,
-  title: payload?.raw?.pull_request?.title ?? null,
-  number: payload?.raw?.pull_request?.number ?? payload?.raw?.number ?? null,
-  baseRef: payload?.raw?.pull_request?.base?.ref ?? null,
-  headRef: payload?.raw?.pull_request?.head?.ref ?? null,
-});
+const extractPushFields = (event) => {
+  const payload = event.payload ?? {};
+  const raw = payload.raw ?? {};
+  const repoName = extractRepoName(event);
+  const head = payload.head ?? raw.head ?? null;
+  const before = payload.before ?? raw.before ?? null;
+  const ref = raw.ref ?? payload.ref ?? null;
+  const branch = payload.branch ?? (typeof ref === 'string' && ref.startsWith('refs/heads/') ? ref.slice('refs/heads/'.length) : raw.branch ?? null);
+  return { repoName, head, before, branch };
+};
 
-const buildFork = (payload) => ({
-  type: 'ForkEvent',
-  repo: extractRepoName(payload),
-  forkedTo: payload?.raw?.forkee?.full_name ?? payload?.raw?.forkee?.name ?? null,
-});
+const parseOwnerRepo = (fullName) => {
+  if (!fullName || typeof fullName !== 'string') return { owner: null, repo: null };
+  const [owner, repo] = fullName.split('/') ?? [];
+  return { owner: owner || null, repo: repo || null };
+};
 
-const buildWatch = (payload) => ({
-  type: 'WatchEvent',
-  repo: extractRepoName(payload),
-  action: payload?.raw?.action ?? null,
-});
+const buildPush = async (event, octokit) => {
+  const { repoName, head, before, branch } = extractPushFields(event);
 
-const buildCreate = (payload) => ({
-  type: 'CreateEvent',
-  repo: extractRepoName(payload),
-  ref: payload?.raw?.ref ?? null,
-  refType: payload?.raw?.ref_type ?? null,
-});
+  if (!repoName || !head) {
+    return {
+      enrichmentType: 'github_push_v1',
+      data: {
+        status: 'skipped_missing_repo_or_head',
+        repo: repoName ?? null,
+        head: head ?? null,
+        before: before ?? null,
+        branch: branch ?? null,
+      },
+    };
+  }
 
-export const buildGithubEnrichment = (eventType, payload) => {
-  switch (eventType) {
+  const base = {
+    repo: repoName,
+    branch,
+    before,
+    head,
+    commit_count: null,
+    commit_subjects: [],
+    compare_url: null,
+    stats: null,
+    status: 'ok_head_only',
+  };
+
+  const { owner, repo } = parseOwnerRepo(repoName);
+  const canCompare = owner && repo && before && head && before !== head && octokit;
+
+  if (canCompare) {
+    try {
+      const res = await octokit.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${before}...${head}` });
+      const commits = res.data?.commits ?? [];
+      const subjects = commits
+        .map((c) => c.commit?.message?.split('\n')[0] || null)
+        .filter(Boolean)
+        .slice(0, 3);
+
+      const stats = res.data?.files
+        ? {
+            additions: res.data.files.reduce((acc, f) => acc + (f.additions ?? 0), 0),
+            deletions: res.data.files.reduce((acc, f) => acc + (f.deletions ?? 0), 0),
+            files_changed: res.data.files.length,
+          }
+        : null;
+
+      return {
+        enrichmentType: 'github_push_v1',
+        data: {
+          ...base,
+          commit_count: commits.length,
+          commit_subjects: subjects,
+          compare_url: res.data?.html_url ?? base.compare_url,
+          stats,
+          status: 'ok_compare',
+        },
+      };
+    } catch (error) {
+      const status = error?.status === 403 ? 'error_rate_limited' : 'error_http';
+      return { enrichmentType: 'github_push_v1', data: { ...base, status } };
+    }
+  }
+
+  if (owner && repo && octokit) {
+    try {
+      const commit = await octokit.rest.repos.getCommit({ owner, repo, ref: head });
+      const subject = commit.data?.commit?.message?.split('\n')[0] ?? null;
+      return {
+        enrichmentType: 'github_push_v1',
+        data: {
+          ...base,
+          commit_count: subject ? 1 : null,
+          commit_subjects: subject ? [subject] : [],
+          status: 'ok_head_only',
+        },
+      };
+    } catch (error) {
+      const status = error?.status === 403 ? 'error_rate_limited' : 'error_http';
+      return { enrichmentType: 'github_push_v1', data: { ...base, status } };
+    }
+  }
+
+  return { enrichmentType: 'github_push_v1', data: base };
+};
+
+const buildPullRequest = (event) => {
+  const payload = event.payload ?? {};
+  const raw = payload.raw ?? {};
+  const pr = raw.pull_request ?? {};
+  const repo = extractRepoName(event);
+
+  if (!repo && !pr?.number) return null;
+
+  return {
+    enrichmentType: 'github_pr_v1',
+    data: {
+      repo: repo ?? null,
+      action: raw?.action ?? payload?.action ?? null,
+      pr_number: pr.number ?? raw?.number ?? null,
+      title: pr.title ?? payload?.title ?? null,
+      base_branch: pr.base?.ref ?? pr.base?.branch ?? null,
+      head_branch: pr.head?.ref ?? pr.head?.branch ?? null,
+      pr_url: pr.html_url ?? pr.url ?? null,
+      status: 'ok',
+    },
+  };
+};
+
+const buildFork = (event) => {
+  const payload = event.payload ?? {};
+  const raw = payload.raw ?? {};
+  const forkee = raw.forkee ?? {};
+  const sourceRepo = event.repo?.name ?? payload?.repo?.name ?? raw?.repo?.full_name ?? null;
+  const forked = forkee.full_name ?? forkee.name ?? null;
+
+  if (!sourceRepo && !forked) return null;
+
+  return {
+    enrichmentType: 'github_fork_v1',
+    data: {
+      source_repo: sourceRepo,
+      forked_repo: forked,
+      description: forkee.description ?? payload?.description ?? null,
+      license: forkee.license?.spdx_id ?? forkee.license?.name ?? null,
+      visibility: typeof forkee.private === 'boolean' ? (forkee.private ? 'private' : 'public') : null,
+      status: 'ok',
+    },
+  };
+};
+
+const buildWatch = (event) => {
+  const repo = extractRepoName(event);
+  if (!repo) return null;
+  return {
+    enrichmentType: 'github_watch_v1',
+    data: {
+      repo,
+      status: 'ok',
+    },
+  };
+};
+
+const buildCreate = (event) => {
+  const payload = event.payload ?? {};
+  const raw = payload.raw ?? {};
+  const repo = extractRepoName(event);
+  const ref = raw?.ref ?? payload?.ref ?? null;
+  const refType = raw?.ref_type ?? payload?.ref_type ?? null;
+
+  if (!repo && !ref && !refType) return null;
+
+  return {
+    enrichmentType: 'github_create_v1',
+    data: {
+      repo: repo ?? null,
+      ref_type: refType,
+      ref_name: ref,
+      description: raw?.description ?? payload?.description ?? null,
+      status: 'ok',
+    },
+  };
+};
+
+export const buildGithubEnrichment = async (event, octokit) => {
+  switch (event.type) {
     case 'PushEvent':
-      return buildPush(payload);
+      return buildPush(event, octokit);
     case 'PullRequestEvent':
-      return buildPullRequest(payload);
+      return buildPullRequest(event);
     case 'ForkEvent':
-      return buildFork(payload);
+      return buildFork(event);
     case 'WatchEvent':
-      return buildWatch(payload);
+      return buildWatch(event);
     case 'CreateEvent':
-      return buildCreate(payload);
+      return buildCreate(event);
     default:
       return null;
   }

@@ -12,7 +12,7 @@ const warnMissingConfig = () => {
   console.warn('GitHub collector missing OAuth access token (lookups expect OAuthToken entries).');
 };
 
-const mapEvent = (event) => {
+const mapEvent = async (event, octokitClient) => {
   const payload = {
     type: event.type,
     repo: event.repo,
@@ -22,12 +22,14 @@ const mapEvent = (event) => {
     url: event.url,
   };
 
+  const enrichment = await buildGithubEnrichment(event, octokitClient);
+
   return {
     eventType: event.type,
     occurredAt: event.created_at,
     externalId: event.id,
     payload,
-    enrichment: buildGithubEnrichment(event.type, payload) ?? undefined,
+    enrichment: enrichment ?? undefined,
   };
 };
 
@@ -84,7 +86,7 @@ const collect = async (cursor) => {
         break;
       }
 
-      items.push(mapEvent(event));
+      items.push(await mapEvent(event, octokit));
     }
 
     if (!continuePaging || response.data.length < 100) {

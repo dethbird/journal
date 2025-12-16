@@ -27,13 +27,16 @@ model EventEnrichment {
   id        String   @id @default(cuid())
   eventId   String
   source    String
+  enrichmentType String @default("unknown")
   data      Json
+  fetchedAt DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   event Event @relation(fields: [eventId], references: [id])
 
-  @@unique([eventId, source])
+  @@unique([eventId, enrichmentType])
+  @@index([source])
 }
 
 model Cursor {
