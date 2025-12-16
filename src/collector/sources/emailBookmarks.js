@@ -1,6 +1,14 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { registerCollector } from '../registry.js';
+import { enrichLink } from '../enrichers/readabilityOg.js';
+
+const withTimeout = (promise, ms, label) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)),
+  ]);
+};
 
 const source = 'email_bookmarks';
 
@@ -85,13 +93,20 @@ const collect = async (cursor) => {
     port: cfg.port,
     secure: cfg.secure,
     auth: { user: cfg.user, pass: cfg.pass },
+    socketTimeout: Number(process.env.EMAIL_BOOKMARK_IMAP_SOCKET_TIMEOUT_MS || 15000),
+  });
+
+  client.on('error', (err) => {
+    console.warn('imap client error', err?.message ?? err);
   });
 
   await client.connect();
 
   try {
     await ensureMailboxOpen(client, cfg.mailbox);
-    await ensureMailboxExists(client, cfg.processedMailbox);
+
+    const processedMailboxName = cfg.processedMailbox.replace(/\//g, '.');
+    await ensureMailboxExists(client, processedMailboxName);
 
     const searchQuery = cursor ? { uid: `${Number(cursor) + 1}:*` } : { seen: false };
     const uids = await client.search(searchQuery, { uid: true });
@@ -103,7 +118,8 @@ const collect = async (cursor) => {
     for (const uid of sortedUids) {
       const fetchResult = client.fetch({ uid }, { source: true, envelope: true, internalDate: true });
       // eslint-disable-next-line no-await-in-loop
-      for await (const msg of fetchResult) {
+      try {
+        for await (const msg of fetchResult) {
         const { subject, from, to, messageId, date, links, snippet } = await parseMessage(msg.source);
         const occurredAt = msg.internalDate || date || new Date();
         const payload = {
@@ -120,28 +136,55 @@ const collect = async (cursor) => {
 
         const externalId = `imap:${cfg.mailbox}:${uid}`;
 
+        let enrichment = null;
+        if (Array.isArray(links) && links.length > 0) {
+          const firstLink = links[0]?.url || links[0];
+          try {
+            const preview = await withTimeout(enrichLink(firstLink), Number(process.env.LINK_PREVIEW_TIMEOUT_MS || 15000), 'enrichLink');
+            enrichment = { enrichmentType: 'readability_v1', data: preview };
+          } catch (err) {
+            enrichment = { enrichmentType: 'readability_v1', data: { status: 'error', error: err?.message ?? String(err) } };
+          }
+        }
+
         items.push({
           eventType: 'BookmarkEvent',
           occurredAt,
           externalId,
           payload,
+          ...(enrichment ? { enrichment } : {}),
         });
 
         try {
-          await client.messageMove(uid, cfg.processedMailbox, { uid: true });
+          await withTimeout(
+            client.messageMove(uid, processedMailboxName, { uid: true }),
+            Number(process.env.EMAIL_BOOKMARK_IMAP_MOVE_TIMEOUT_MS || 5000),
+            'messageMove',
+          );
         } catch (err) {
-          console.warn(`Failed to move message UID ${uid} to ${cfg.processedMailbox}:`, err?.message ?? err);
+          console.warn(`Failed to move message UID ${uid} to ${processedMailboxName}:`, err?.message ?? err);
+          // Option 3: best-effort move; do not mark seen or retry here.
         }
 
         if (!maxUid || uid > maxUid) {
           maxUid = uid;
         }
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch/process UID ${uid}:`, err?.message ?? err);
+        // try to continue with next UID
+        continue;
       }
     }
 
     return { items, nextCursor: maxUid != null ? String(maxUid) : cursor };
   } finally {
-    await client.logout().catch(() => {});
+    try {
+      await withTimeout(client.logout(), Number(process.env.EMAIL_BOOKMARK_IMAP_LOGOUT_TIMEOUT_MS || 2000), 'logout');
+    } catch (err) {
+      console.warn('imap client logout fallback close:', err?.message ?? err);
+      await client.close().catch(() => {});
+    }
   }
 };
 

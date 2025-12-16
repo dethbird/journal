@@ -29,6 +29,8 @@
     "dotenv": "^16.5.0",
     "fastify": "^4.28.1",
     "node-fetch": "^3.3.2",
+    "@mozilla/readability": "^0.5.0",
+    "jsdom": "^24.1.0",
     "bulma": "^0.9.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
