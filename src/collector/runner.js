@@ -26,11 +26,11 @@ const insertEvent = async (source, item) => {
   };
 
   try {
-    await prisma.event.create({ data: record });
-    return true;
+    const created = await prisma.event.create({ data: record });
+    return created;
   } catch (error) {
     if (error.code === 'P2002') {
-      return false;
+      return null;
     }
     throw error;
   }
@@ -61,9 +61,17 @@ export const runCollectorCycle = async () => {
     let stored = 0;
     if (Array.isArray(items)) {
       for (const item of items) {
-        const persisted = await insertEvent(source, item);
-        if (persisted) {
+        const createdEvent = await insertEvent(source, item);
+        if (createdEvent) {
           stored += 1;
+
+          if (item.enrichment) {
+            await prisma.eventEnrichment.upsert({
+              where: { eventId_source: { eventId: createdEvent.id, source } },
+              update: { data: item.enrichment },
+              create: { eventId: createdEvent.id, source, data: item.enrichment },
+            });
+          }
         }
       }
     }

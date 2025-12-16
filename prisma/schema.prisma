@@ -17,9 +17,23 @@ model Event {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
   dayEvents  DayEvent[]
+  enrichments EventEnrichment[]
 
   @@index([source, occurredAt])
   @@unique([source, externalId])
+}
+
+model EventEnrichment {
+  id        String   @id @default(cuid())
+  eventId   String
+  source    String
+  data      Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id])
+
+  @@unique([eventId, source])
 }
 
 model Cursor {

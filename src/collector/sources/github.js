@@ -1,6 +1,7 @@
 import { Octokit } from '@octokit/rest';
 import { registerCollector } from '../registry.js';
 import { resolveGitHubAccessToken } from '../../auth/github.js';
+import { buildGithubEnrichment } from '../enrichers/github.js';
 
 const source = 'github';
 const activityMode = process.env.GITHUB_ACTIVITY_MODE ?? 'authenticated_events';
@@ -11,19 +12,24 @@ const warnMissingConfig = () => {
   console.warn('GitHub collector missing OAuth access token (lookups expect OAuthToken entries).');
 };
 
-const mapEvent = (event) => ({
-  eventType: event.type,
-  occurredAt: event.created_at,
-  externalId: event.id,
-  payload: {
+const mapEvent = (event) => {
+  const payload = {
     type: event.type,
     repo: event.repo,
     actor: event.actor,
     public: event.public,
     raw: event.payload,
     url: event.url,
-  },
-});
+  };
+
+  return {
+    eventType: event.type,
+    occurredAt: event.created_at,
+    externalId: event.id,
+    payload,
+    enrichment: buildGithubEnrichment(event.type, payload) ?? undefined,
+  };
+};
 
 const collect = async (cursor) => {
   const token = await resolveGitHubAccessToken();
