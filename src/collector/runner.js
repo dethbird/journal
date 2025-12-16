@@ -2,6 +2,41 @@ import prisma from '../lib/prismaClient.js';
 
 const collectors = [];
 
+const normalizeOccurrence = (value) => {
+  if (!value) {
+    return new Date();
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date();
+  }
+
+  return parsed;
+};
+
+const insertEvent = async (source, item) => {
+  const occurredAt = normalizeOccurrence(item.occurredAt);
+
+  const record = {
+    source,
+    eventType: item.eventType ?? 'event',
+    occurredAt,
+    externalId: item.externalId,
+    payload: item.payload ?? {},
+  };
+
+  try {
+    await prisma.event.create({ data: record });
+    return true;
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return false;
+    }
+    throw error;
+  }
+};
+
 export const registerCollector = (collector) => {
   if (!collector || typeof collector.collect !== 'function' || !collector.source) {
     throw new Error('Collector must expose source and a collect() implementation');
@@ -34,6 +69,16 @@ export const runCollectorCycle = async () => {
     const sinceCursor = cursorRecord.cursor ?? null;
     const { items = [], nextCursor = null } = await collector.collect(sinceCursor);
 
+    let stored = 0;
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        const persisted = await insertEvent(source, item);
+        if (persisted) {
+          stored += 1;
+        }
+      }
+    }
+
     if (nextCursor && nextCursor !== cursorRecord.cursor) {
       await prisma.cursor.update({
         where: { source },
@@ -43,7 +88,7 @@ export const runCollectorCycle = async () => {
 
     results.push({
       source,
-      collected: Array.isArray(items) ? items.length : 0,
+      collected: stored,
       nextCursor,
     });
   }
