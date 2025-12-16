@@ -31,6 +31,7 @@ const buildDigest = async () => {
   const events = await prisma.event.findMany({
     where: { occurredAt: { gte: since, lte: now } },
     orderBy: { occurredAt: 'asc' },
+    include: { enrichments: true },
   });
 
   const grouped = new Map();
@@ -63,7 +64,9 @@ const renderDigest = (digest) => {
 
   for (const section of digest.sections) {
     lines.push('');
-    lines.push(`== ${section.title} ==`);
+    if (!section.skipTitle) {
+      lines.push(`== ${section.title} ==`);
+    }
     for (const line of section.lines) {
       lines.push(line);
     }
