@@ -1,0 +1,26 @@
+:root {
+  --bg: #f5f7fb;
+  --accent: #2c7be5;
+}
+
+body {
+  background: var(--bg);
+}
+
+.hero .title {
+  color: #121826;
+}
+
+.hero .subtitle {
+  color: #4b5563;
+}
+
+.box {
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+
+ul {
+  list-style: disc inside;
+}
+

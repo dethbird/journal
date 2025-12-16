@@ -1,0 +1,34 @@
+{
+  "name": "journal",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/web/server.js",
+    "ui:dev": "vite --config src/ui/vite.config.js",
+    "ui:build": "vite build --config src/ui/vite.config.js",
+    "ui:preview": "vite preview --config src/ui/vite.config.js",
+    "collector:run": "node src/collector/run.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init",
+    "prisma:reset": "prisma migrate reset --force",
+    "test-db": "node scripts/test-db.js",
+    "reset-db": "node scripts/reset-db.js"
+  },
+  "dependencies": {
+    "@fastify/cors": "^8.4.0",
+    "@fastify/static": "^7.0.2",
+    "@prisma/client": "^5.22.0",
+    "dotenv": "^16.5.0",
+    "fastify": "^4.28.1",
+    "node-fetch": "^3.3.2",
+    "bulma": "^0.9.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "prisma": "^5.22.0",
+    "vite": "^5.4.8"
+  }
+}
