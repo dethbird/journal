@@ -1,4 +1,7 @@
-# Logs
+node_modules/
+.env
+dumps/
+/*.sql# Logs
 logs
 *.log
 npm-debug.log*
