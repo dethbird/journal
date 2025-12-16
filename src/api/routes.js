@@ -20,6 +20,18 @@ async function apiRoutes(server) {
       include: { dayEvents: { include: { event: true } } }
     });
   });
+
+  // Return the current user (dev fallback). If you add sessions later,
+  // replace this with session-based lookup.
+  server.get('/me', async () => {
+    // Prefer a development email if provided, otherwise return first user.
+    const devEmail = process.env.DEV_USER_EMAIL || 'rishi.satsangi@gmail.com';
+    let user = await prisma.user.findUnique({ where: { email: devEmail } });
+    if (!user) {
+      user = await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } });
+    }
+    return { user };
+  });
 }
 
 export default apiRoutes;
