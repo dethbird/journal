@@ -6,7 +6,9 @@ import { buildGithubEnrichment } from '../enrichers/github.js';
 const source = 'github';
 const activityMode = process.env.GITHUB_ACTIVITY_MODE ?? 'authenticated_events';
 const username = process.env.GITHUB_ACTIVITY_USERNAME;
-const MAX_PAGES = 6;
+// Maximum pages to fetch per run (100 events per page). Make configurable via env var
+// to allow going farther back in history when needed.
+const MAX_PAGES = Number(process.env.GITHUB_MAX_PAGES ?? 6);
 
 const warnMissingConfig = () => {
   console.warn('GitHub collector missing OAuth access token (lookups expect OAuthToken entries).');
