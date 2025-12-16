@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import prisma from '../lib/prismaClient.js';
 import './sources/github.js';
+import './sources/emailBookmarks.js';
 import { runCollectorCycle } from './runner.js';
 
 const entryFile = fileURLToPath(import.meta.url);

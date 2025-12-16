@@ -11,6 +11,7 @@ A Fastify API + React UI monolith that collects personal activity events, stores
 - Prisma schema (`prisma/schema.prisma`) models `Event`, `Cursor`, `Day`, `DayEvent`, and a minimal identity stack (users, connected accounts, OAuth tokens).
 - Collector runner (`src/collector/runner.js`) persists JSON events and cursor state into Postgres.
 - GitHub collector (`src/collector/sources/github.js`) fetches authenticated-user events, dedupes by event ID, and stores them as journal events, while the helper (`src/collector/githubAuth.js`) resolves OAuth tokens from the `OAuthToken` table (fallback to `GITHUB_TOKEN`).
+- Email bookmarks collector (`src/collector/sources/emailBookmarks.js`) pulls IMAP mail, extracts links, emits one `BookmarkEvent` per message, and moves processed messages into a configured folder while advancing a UID cursor.
 - Vite + React UI scaffolding in `src/ui` renders a Bulma-styled hero (future UI will hook into the API).
 
 ## Setup
@@ -51,7 +52,18 @@ A Fastify API + React UI monolith that collects personal activity events, stores
 
 - Collector registry is in `src/collector/registry.js`; add new collectors via `registerCollector({ source, collect })`.
 - GitHub collector stores authenticated events by paging the Events API (`src/collector/sources/github.js`).
+- Email bookmarks collector uses IMAP to pull messages, extract URLs, store them as `BookmarkEvent` payloads with a `links` array, and moves processed mail to a destination folder (`src/collector/sources/emailBookmarks.js`).
 - Collector CLI entrypoint `src/collector/run.js` wires into the runner and disconnects Prisma on exit.
+
+### Email bookmarks collector config
+
+Set these env vars (see `.env.example`):
+- `EMAIL_BOOKMARK_IMAP_HOST`, `EMAIL_BOOKMARK_IMAP_PORT`, `EMAIL_BOOKMARK_IMAP_SECURE`
+- `EMAIL_BOOKMARK_USERNAME`, `EMAIL_BOOKMARK_PASSWORD`
+- `EMAIL_BOOKMARK_MAILBOX` (default `INBOX`)
+- `EMAIL_BOOKMARK_PROCESSED_MAILBOX` (default `INBOX/Processed`)
+
+The collector uses the last seen UID as its cursor; when no cursor exists, it fetches unseen mail. Each email becomes one `BookmarkEvent` with `payload.links` as an array of `{ url, text }`, and messages are moved to the processed mailbox after processing.
 
 ## Next steps
 
