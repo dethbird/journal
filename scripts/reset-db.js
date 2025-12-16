@@ -12,5 +12,14 @@ child.on('close', (code) => {
   if (code !== 0) {
     console.error(`reset-db exited with ${code}`);
   }
-  process.exit(code ?? 0);
+  if (code === 0) {
+    // run seed after successful reset
+    const seed = spawn('node', ['scripts/seed.js'], { stdio: 'inherit', env: { ...process.env } });
+    seed.on('close', (s) => {
+      if (s !== 0) console.error(`seed exited with ${s}`);
+      process.exit(s ?? 0);
+    });
+  } else {
+    process.exit(code ?? 0);
+  }
 });

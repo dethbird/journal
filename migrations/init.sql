@@ -87,3 +87,10 @@ CREATE TABLE IF NOT EXISTS oauth_tokens (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Insert a default initial user for development (id generated)
+INSERT INTO users (id, email, display_name, created_at, updated_at)
+SELECT gen_random_uuid(), 'rishi.satsangi@gmail.com', 'dethbird', now(), now()
+WHERE NOT EXISTS (
+  SELECT 1 FROM users WHERE email = 'rishi.satsangi@gmail.com'
+);
