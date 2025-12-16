@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import prisma from '../lib/prismaClient.js';
-import './github.js';
+import './sources/github.js';
 import { runCollectorCycle } from './runner.js';
 
 const entryFile = fileURLToPath(import.meta.url);

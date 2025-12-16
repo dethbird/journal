@@ -1,6 +1,6 @@
 import { Octokit } from '@octokit/rest';
-import { registerCollector } from './runner.js';
-import { resolveGitHubAccessToken } from './githubAuth.js';
+import { registerCollector } from '../registry.js';
+import { resolveGitHubAccessToken } from '../../auth/github.js';
 
 const source = 'github';
 const activityMode = process.env.GITHUB_ACTIVITY_MODE ?? 'authenticated_events';

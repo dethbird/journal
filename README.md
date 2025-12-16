@@ -10,7 +10,7 @@ A Fastify API + React UI monolith that collects personal activity events, stores
   - Health and OAuth callback scaffolding.
 - Prisma schema (`prisma/schema.prisma`) models `Event`, `Cursor`, `Day`, `DayEvent`, and a minimal identity stack (users, connected accounts, OAuth tokens).
 - Collector runner (`src/collector/runner.js`) persists JSON events and cursor state into Postgres.
-- GitHub collector (`src/collector/github.js`) fetches authenticated-user events, dedupes by event ID, and stores them as journal events, while the helper (`src/collector/githubAuth.js`) resolves OAuth tokens from the `OAuthToken` table (fallback to `GITHUB_TOKEN`).
+- GitHub collector (`src/collector/sources/github.js`) fetches authenticated-user events, dedupes by event ID, and stores them as journal events, while the helper (`src/collector/githubAuth.js`) resolves OAuth tokens from the `OAuthToken` table (fallback to `GITHUB_TOKEN`).
 - Vite + React UI scaffolding in `src/ui` renders a Bulma-styled hero (future UI will hook into the API).
 
 ## Setup
@@ -49,8 +49,8 @@ A Fastify API + React UI monolith that collects personal activity events, stores
 
 ## Collectors
 
-- Collector registry is in `src/collector/runner.js`; add new collectors via `registerCollector({ source, collect })`.
-- GitHub collector stores authenticated events by paging the Events API (`src/collector/github.js`).
+- Collector registry is in `src/collector/registry.js`; add new collectors via `registerCollector({ source, collect })`.
+- GitHub collector stores authenticated events by paging the Events API (`src/collector/sources/github.js`).
 - Collector CLI entrypoint `src/collector/run.js` wires into the runner and disconnects Prisma on exit.
 
 ## Next steps

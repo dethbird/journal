@@ -1,6 +1,5 @@
 import prisma from '../lib/prismaClient.js';
-
-const collectors = [];
+import { listCollectors } from './registry.js';
 
 const normalizeOccurrence = (value) => {
   if (!value) {
@@ -37,19 +36,9 @@ const insertEvent = async (source, item) => {
   }
 };
 
-export const registerCollector = (collector) => {
-  if (!collector || typeof collector.collect !== 'function' || !collector.source) {
-    throw new Error('Collector must expose source and a collect() implementation');
-  }
-
-  if (collectors.some((entry) => entry.source === collector.source)) {
-    throw new Error(`Collector for source "${collector.source}" already registered`);
-  }
-
-  collectors.push(collector);
-};
-
 export const runCollectorCycle = async () => {
+  const collectors = listCollectors();
+
   if (collectors.length === 0) {
     console.log('No collectors registered yet. Nothing to collect.');
     return [];
