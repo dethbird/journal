@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { registerCollector } from '../registry.js';
+import prisma from '../../lib/prismaClient.js';
 import { enrichLink } from '../enrichers/readabilityOg.js';
 
 const withTimeout = (promise, ms, label) => {
@@ -11,22 +12,6 @@ const withTimeout = (promise, ms, label) => {
 };
 
 const source = 'email_bookmarks';
-
-const configFromEnv = () => {
-  const host = process.env.EMAIL_BOOKMARK_IMAP_HOST || 'mail.dethbird.com';
-  const port = Number(process.env.EMAIL_BOOKMARK_IMAP_PORT || 993);
-  const secure = process.env.EMAIL_BOOKMARK_IMAP_SECURE ? process.env.EMAIL_BOOKMARK_IMAP_SECURE === 'true' : true;
-  const user = process.env.EMAIL_BOOKMARK_USERNAME;
-  const pass = process.env.EMAIL_BOOKMARK_PASSWORD;
-  const mailbox = process.env.EMAIL_BOOKMARK_MAILBOX || 'INBOX';
-  const processedMailbox = process.env.EMAIL_BOOKMARK_PROCESSED_MAILBOX || 'INBOX/Processed';
-
-  if (!user || !pass) {
-    throw new Error('EMAIL_BOOKMARK_USERNAME and EMAIL_BOOKMARK_PASSWORD are required for email bookmarks collector');
-  }
-
-  return { host, port, secure, user, pass, mailbox, processedMailbox };
-};
 
 const extractLinks = (text) => {
   if (!text) return [];
@@ -91,8 +76,23 @@ const isConnectionError = (error) => {
   return message.includes('Connection not available') || message.includes('Socket timeout') || error?.code === 'NoConnection';
 };
 
-const collect = async (cursor) => {
-  const cfg = configFromEnv();
+const collectForAccount = async (connectedAccount, cursor) => {
+  const settings = connectedAccount.emailBookmarkSettings;
+  if (!settings) {
+    console.warn(`Skipping email_bookmarks collection: no settings for connectedAccount=${connectedAccount.id}`);
+    return { items: [], nextCursor: null };
+  }
+
+  const cfg = {
+    host: settings.host,
+    port: settings.port,
+    secure: settings.secure,
+    user: settings.username,
+    pass: settings.password,
+    mailbox: settings.mailbox,
+    processedMailbox: settings.processedMailbox,
+  };
+
   const processedMailboxName = cfg.processedMailbox.replace(/\//g, '.');
 
   const createClient = async () => {
@@ -184,6 +184,7 @@ const collect = async (cursor) => {
               occurredAt,
               externalId,
               payload,
+              userId: connectedAccount.userId,
               ...(enrichment ? { enrichment } : {}),
             });
 
@@ -220,7 +221,37 @@ const collect = async (cursor) => {
     await closeClient(client);
   }
 };
+const collect = async () => {
+  const accounts = await prisma.connectedAccount.findMany({
+    where: { provider: source, status: 'active' },
+    include: { emailBookmarkSettings: true },
+  });
 
-registerCollector({ source, collect });
+  if (accounts.length === 0) {
+    console.warn('No email_bookmarks connected accounts found; skipping collection.');
+    return { items: [], nextCursor: null };
+  }
+
+  const allItems = [];
+
+  for (const account of accounts) {
+    // per-account cursor
+    let cursorRecord = await prisma.cursor.findFirst({ where: { source, connectedAccountId: account.id } });
+    if (!cursorRecord) {
+      cursorRecord = await prisma.cursor.create({ data: { source, connectedAccountId: account.id } });
+    }
+
+    const { items = [], nextCursor = null } = await collectForAccount(account, cursorRecord.cursor ?? null);
+    allItems.push(...items);
+
+    if (nextCursor && nextCursor !== cursorRecord.cursor) {
+      await prisma.cursor.update({ where: { id: cursorRecord.id }, data: { cursor: nextCursor } });
+    }
+  }
+
+  return { items: allItems, nextCursor: null };
+};
+
+registerCollector({ source, collect, collectForAccount });
 
 export default collect;

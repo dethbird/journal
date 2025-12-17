@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { CONNECT_PROVIDERS } from '../constants';
 
 function ConnectedAccountRow({ provider, connected, onDisconnect }) {
@@ -36,6 +36,159 @@ function ConnectedAccountRow({ provider, connected, onDisconnect }) {
   );
 }
 
+function EmailBookmarkSettingsForm() {
+  const [settings, setSettings] = useState({
+    host: '',
+    port: 993,
+    secure: true,
+    mailbox: 'INBOX',
+    processedMailbox: 'INBOX/Processed',
+    username: '',
+    password: '',
+    passwordPresent: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/email-bookmark/settings', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.settings) {
+            setSettings((prev) => ({ ...prev, ...data.settings, password: '' }));
+          }
+        }
+      } catch (e) {
+        // ignore load errors for now
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const payload = { ...settings };
+      if (!payload.password) delete payload.password;
+      const res = await fetch('/api/email-bookmark/settings', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Save failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (data.settings) {
+        setSettings((prev) => ({ ...prev, ...data.settings, password: '' }));
+      }
+      setMessage('Saved');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage(null), 2500);
+    }
+  };
+
+  if (loading) return <p className="subtitle">Loading email settings…</p>;
+
+  return (
+    <div className="box mt-4">
+      <p className="is-size-5 has-text-weight-semibold">Email bookmarks</p>
+      <form className="mt-3" onSubmit={handleSubmit}>
+        <div className="columns is-multiline">
+          <div className="column is-half">
+            <label className="label">Host</label>
+            <input
+              className="input"
+              value={settings.host}
+              onChange={(e) => setSettings({ ...settings, host: e.target.value })}
+              required
+            />
+          </div>
+          <div className="column is-one-quarter">
+            <label className="label">Port</label>
+            <input
+              className="input"
+              type="number"
+              value={settings.port}
+              onChange={(e) => setSettings({ ...settings, port: Number(e.target.value) })}
+              required
+            />
+          </div>
+          <div className="column is-one-quarter">
+            <label className="label">Secure</label>
+            <label className="checkbox mt-2">
+              <input
+                type="checkbox"
+                checked={settings.secure}
+                onChange={(e) => setSettings({ ...settings, secure: e.target.checked })}
+              />{' '}
+              Use TLS/SSL
+            </label>
+          </div>
+          <div className="column is-half">
+            <label className="label">Mailbox</label>
+            <input
+              className="input"
+              value={settings.mailbox}
+              onChange={(e) => setSettings({ ...settings, mailbox: e.target.value })}
+            />
+          </div>
+          <div className="column is-half">
+            <label className="label">Processed mailbox</label>
+            <input
+              className="input"
+              value={settings.processedMailbox}
+              onChange={(e) => setSettings({ ...settings, processedMailbox: e.target.value })}
+            />
+          </div>
+          <div className="column is-half">
+            <label className="label">Username</label>
+            <input
+              className="input"
+              value={settings.username}
+              onChange={(e) => setSettings({ ...settings, username: e.target.value })}
+              required
+            />
+          </div>
+          <div className="column is-half">
+            <label className="label">Password {settings.passwordPresent ? '(leave blank to keep existing)' : ''}</label>
+            <input
+              className="input"
+              type="password"
+              value={settings.password}
+              onChange={(e) => setSettings({ ...settings, password: e.target.value })}
+              placeholder={settings.passwordPresent ? '••••••••' : ''}
+            />
+          </div>
+        </div>
+        <div className="field is-grouped">
+          <div className="control">
+            <button className={`button is-primary${saving ? ' is-loading' : ''}`} type="submit">
+              Save
+            </button>
+          </div>
+          {message && <p className="help is-success">{message}</p>}
+          {error && <p className="help is-danger">{error}</p>}
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Settings({ user, onDisconnect }) {
   const connectedAccounts = user?.connectedAccounts || [];
 
@@ -62,6 +215,8 @@ export default function Settings({ user, onDisconnect }) {
           })}
         </div>
       </div>
+
+      <EmailBookmarkSettingsForm />
     </div>
   );
 }

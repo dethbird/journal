@@ -114,9 +114,26 @@ model ConnectedAccount {
   user               User         @relation(fields: [userId], references: [id])
   oauthTokens        OAuthToken[]
   cursors            Cursor[]
+  emailBookmarkSettings EmailBookmarkSettings?
 
   @@unique([userId, provider, providerAccountId])
   @@index([userId, provider])
+}
+
+model EmailBookmarkSettings {
+  id                 String   @id @default(cuid())
+  connectedAccountId String   @unique
+  host               String
+  port               Int
+  secure             Boolean  @default(true)
+  mailbox            String   @default("INBOX")
+  processedMailbox   String   @default("INBOX/Processed")
+  username           String
+  password           String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
 }
 
 model OAuthToken {

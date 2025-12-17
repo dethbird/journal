@@ -152,6 +152,19 @@ const getSessionUser = async (request) => {
   return user;
 };
 
+const serializeEmailBookmarkSettings = (settings) => {
+  if (!settings) return null;
+  return {
+    host: settings.host,
+    port: settings.port,
+    secure: settings.secure,
+    mailbox: settings.mailbox,
+    processedMailbox: settings.processedMailbox,
+    username: settings.username,
+    passwordPresent: !!settings.password,
+  };
+};
+
 const upsertConnectedAccount = async (userId, provider, providerAccountId, displayName, scopes) => {
   return prisma.connectedAccount.upsert({
     where: {
@@ -173,6 +186,24 @@ const upsertConnectedAccount = async (userId, provider, providerAccountId, displ
       scopes,
     },
     include: { oauthTokens: true },
+  });
+};
+
+const ensureEmailBookmarkAccount = async (user, providerAccountId, displayName = 'Email Bookmarks') => {
+  const existing = await prisma.connectedAccount.findFirst({
+    where: { userId: user.id, provider: 'email_bookmarks' },
+    include: { emailBookmarkSettings: true },
+  });
+  if (existing) return existing;
+
+  return prisma.connectedAccount.create({
+    data: {
+      userId: user.id,
+      provider: 'email_bookmarks',
+      providerAccountId: providerAccountId || user.email || user.id,
+      displayName,
+    },
+    include: { emailBookmarkSettings: true },
   });
 };
 
@@ -648,6 +679,72 @@ app.get('/api/me', async (request, reply) => {
       })),
     })),
   };
+});
+
+app.get('/api/email-bookmark/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const account = await prisma.connectedAccount.findFirst({
+    where: { userId: user.id, provider: 'email_bookmarks' },
+    include: { emailBookmarkSettings: true },
+  });
+
+  return { settings: serializeEmailBookmarkSettings(account?.emailBookmarkSettings) };
+});
+
+app.post('/api/email-bookmark/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const {
+    host,
+    port,
+    secure = true,
+    mailbox = 'INBOX',
+    processedMailbox = 'INBOX/Processed',
+    username,
+    password,
+  } = request.body ?? {};
+
+  if (!host || !username) {
+    return reply.status(400).send({ error: 'host and username are required' });
+  }
+
+  const portNumber = Number(port ?? 993);
+  if (Number.isNaN(portNumber) || portNumber <= 0) {
+    return reply.status(400).send({ error: 'port must be a positive number' });
+  }
+
+  const account = await ensureEmailBookmarkAccount(user, username, 'Email Bookmarks');
+
+  const existing = await prisma.emailBookmarkSettings.findUnique({ where: { connectedAccountId: account.id } });
+
+  const data = {
+    host,
+    port: portNumber,
+    secure: !!secure,
+    mailbox,
+    processedMailbox,
+    username,
+  };
+
+  if (password) {
+    data.password = password;
+  } else if (existing?.password) {
+    // keep existing password if none provided
+    data.password = existing.password;
+  } else {
+    return reply.status(400).send({ error: 'password is required' });
+  }
+
+  const settings = await prisma.emailBookmarkSettings.upsert({
+    where: { connectedAccountId: account.id },
+    update: data,
+    create: { ...data, connectedAccountId: account.id },
+  });
+
+  return { settings: serializeEmailBookmarkSettings(settings) };
 });
 
 app.get('/health', async () => ({ status: 'ok' }));

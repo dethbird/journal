@@ -117,6 +117,7 @@ const collectForAccount = async (connectedAccount) => {
 };
 
 const collect = async () => {
+  // legacy global-collector fallback: call per-account internally
   const accounts = await prisma.connectedAccount.findMany({
     where: { provider: 'github', status: 'active' },
     include: { oauthTokens: { orderBy: { updatedAt: 'desc' }, take: 1 } },
@@ -136,6 +137,6 @@ const collect = async () => {
   return { items: allItems, nextCursor: null };
 };
 
-registerCollector({ source, collect });
+registerCollector({ source, collect, collectForAccount });
 
 export default collect;

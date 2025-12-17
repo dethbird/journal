@@ -48,16 +48,41 @@ export const runCollectorCycle = async () => {
   const results = [];
 
   for (const collector of collectors) {
-    const { source } = collector;
+    const { source, collect, collectForAccount } = collector;
 
-    // Find or create the global cursor record for this collector (connectedAccountId = null)
-    let cursorRecord = await prisma.cursor.findFirst({ where: { source, connectedAccountId: null } });
-    if (!cursorRecord) {
-      cursorRecord = await prisma.cursor.create({ data: { source, connectedAccountId: null } });
+    // If the collector exposes a per-account collector, call that for each connected account.
+    if (typeof collectForAccount === 'function') {
+      const accounts = await prisma.connectedAccount.findMany({ where: { provider: source, status: 'active' }, include: { oauthTokens: true, emailBookmarkSettings: true } });
+
+      let totalStored = 0;
+
+      for (const account of accounts) {
+        const { items = [], nextCursor = null } = await collectForAccount(account);
+
+        for (const item of items) {
+          const createdEvent = await insertEvent(source, item);
+          if (createdEvent) {
+            totalStored += 1;
+
+            if (item.enrichment) {
+              await prisma.eventEnrichment.upsert({
+                where: { eventId_enrichmentType: { eventId: createdEvent.id, enrichmentType: item.enrichment.enrichmentType } },
+                update: { data: item.enrichment.data, source },
+                create: { eventId: createdEvent.id, source, enrichmentType: item.enrichment.enrichmentType, data: item.enrichment.data },
+              });
+            }
+          }
+        }
+      }
+
+      results.push({ source, collected: totalStored, nextCursor: null });
+      continue;
     }
 
+    // Fallback: call the legacy global collector
+    const cursorRecord = await prisma.cursor.findFirst({ where: { source, connectedAccountId: null } }) || await prisma.cursor.create({ data: { source, connectedAccountId: null } });
     const sinceCursor = cursorRecord.cursor ?? null;
-    const { items = [], nextCursor = null } = await collector.collect(sinceCursor);
+    const { items = [], nextCursor = null } = await collect(sinceCursor);
 
     let stored = 0;
     if (Array.isArray(items)) {
@@ -81,11 +106,7 @@ export const runCollectorCycle = async () => {
       await prisma.cursor.update({ where: { id: cursorRecord.id }, data: { cursor: nextCursor } });
     }
 
-    results.push({
-      source,
-      collected: stored,
-      nextCursor,
-    });
+    results.push({ source, collected: stored, nextCursor });
   }
 
   return results;
