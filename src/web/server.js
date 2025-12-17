@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 
 import prisma from '../lib/prismaClient.js';
+import buildDigestViewModel from '../digest/viewModel.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -600,6 +601,33 @@ app.get('/api/oauth/github/callback', async (request, reply) => {
   } catch (err) {
     request.log.error(err, 'GitHub OAuth callback failed');
     return reply.status(500).send({ error: err?.message ?? String(err) });
+  }
+});
+
+app.get('/api/digest', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) {
+    return reply.status(401).send({ error: 'Not authenticated' });
+  }
+
+  let since;
+  let until;
+  try {
+    since = parseDateParam(request.query.since);
+    until = parseDateParam(request.query.until);
+  } catch (error) {
+    request.log.warn(error, 'Invalid digest date range');
+    return reply.status(400).send({ error: error.message });
+  }
+
+  const hours = Number(request.query.hours ?? 24);
+
+  try {
+    const vm = await buildDigestViewModel({ since, until, rangeHours: hours, userId: user.id });
+    return vm;
+  } catch (err) {
+    request.log.error(err, 'Failed to build digest view model');
+    return reply.status(500).send({ error: 'Failed to build digest' });
   }
 });
 
