@@ -1,5 +1,9 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
+import fastifyOauth2 from '@fastify/oauth2';
+import fastifyCookie from '@fastify/cookie';
+import secureSession from '@fastify/secure-session';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -16,6 +20,29 @@ const indexHtmlPath = path.join(distPath, 'index.html');
 
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 200;
+const defaultUserEmail = process.env.DEFAULT_USER_EMAIL || 'demo@example.com';
+
+const spotifyConfig = {
+  clientId: process.env.SPOTIFY_CLIENT_ID,
+  clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+  callbackUrl: process.env.SPOTIFY_CALLBACK_URL || 'http://localhost:3000/api/oauth/spotify/callback',
+  scopes: (process.env.SPOTIFY_SCOPES || 'user-read-email').split(/\s+/).filter(Boolean),
+};
+
+const getSessionKey = () => {
+  const s = process.env.SESSION_SECRET;
+  if (!s) return crypto.randomBytes(32);
+  // support hex-encoded 32-byte key
+  if (/^[0-9a-fA-F]{64}$/.test(s)) {
+    return Buffer.from(s, 'hex');
+  }
+  return Buffer.from(s);
+};
+
+const base64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+const sha256 = (str) => crypto.createHash('sha256').update(str).digest();
+
 
 const parseLimit = (value) => {
   const parsed = Number(value ?? DEFAULT_LIMIT);
@@ -56,9 +83,103 @@ const formatDay = (day) => ({
     .sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt)),
 });
 
+const ensureDefaultUser = async () => {
+  return prisma.user.upsert({
+    where: { email: defaultUserEmail },
+    update: {},
+    create: { email: defaultUserEmail, displayName: 'Default User' },
+  });
+};
+
+const upsertConnectedAccount = async (userId, providerAccountId, displayName, scopes) => {
+  return prisma.connectedAccount.upsert({
+    where: {
+      userId_provider_providerAccountId: {
+        userId,
+        provider: 'spotify',
+        providerAccountId,
+      },
+    },
+    update: {
+      displayName,
+      scopes,
+    },
+    create: {
+      userId,
+      provider: 'spotify',
+      providerAccountId,
+      displayName,
+      scopes,
+    },
+    include: { oauthTokens: true },
+  });
+};
+
+const storeOAuthToken = async (connectedAccountId, tokenResponse) => {
+  const expiresAt =
+    tokenResponse.expires_in != null
+      ? new Date(Date.now() + Number(tokenResponse.expires_in) * 1000)
+      : null;
+
+  return prisma.oAuthToken.create({
+    data: {
+      connectedAccountId,
+      accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token ?? null,
+      tokenType: tokenResponse.token_type ?? null,
+      scope: tokenResponse.scope ?? null,
+      expiresAt,
+      idToken: tokenResponse.id_token ?? null,
+      tokenJson: tokenResponse,
+    },
+  });
+};
+
+const fetchSpotifyProfile = async (accessToken) => {
+  const res = await fetch('https://api.spotify.com/v1/me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Spotify profile fetch failed (${res.status})`);
+  }
+  return res.json();
+};
+
 app.register(fastifyStatic, {
   root: distPath,
   prefix: '/',
+});
+
+// cookies + encrypted session for OAuth handshake (state + PKCE)
+app.register(fastifyCookie);
+app.register(secureSession, {
+  key: getSessionKey(),
+  cookie: {
+    path: '/',
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+  },
+});
+
+if (!spotifyConfig.clientId || !spotifyConfig.clientSecret) {
+  app.log.warn('Spotify OAuth not configured (SPOTIFY_CLIENT_ID/SECRET missing).');
+}
+
+app.register(fastifyOauth2, {
+  name: 'spotifyOAuth2',
+  scope: spotifyConfig.scopes,
+  credentials: {
+    client: {
+      id: spotifyConfig.clientId,
+      secret: spotifyConfig.clientSecret,
+    },
+    auth: {
+      tokenHost: 'https://accounts.spotify.com',
+      tokenPath: '/api/token',
+      authorizePath: '/authorize',
+    },
+  },
+  callbackUri: spotifyConfig.callbackUrl,
 });
 
 app.addHook('onClose', async () => {
@@ -118,6 +239,111 @@ app.get('/api/days/:date', async (request, reply) => {
   return formatDay(day);
 });
 
+app.get('/api/oauth/spotify/start', async (request, reply) => {
+  if (!spotifyConfig.clientId || !spotifyConfig.clientSecret) {
+    return reply.status(503).send({ error: 'Spotify OAuth not configured' });
+  }
+
+  const state = crypto.randomBytes(16).toString('hex');
+  const codeVerifier = base64url(crypto.randomBytes(32));
+  const codeChallenge = base64url(sha256(codeVerifier));
+
+  // store verifier keyed by state
+  try {
+    request.session.set(`pkce:${state}`, codeVerifier);
+  } catch (e) {
+    request.log.warn(e, 'Failed to store PKCE verifier in session');
+  }
+
+  const params = new URLSearchParams({
+    client_id: spotifyConfig.clientId,
+    response_type: 'code',
+    redirect_uri: spotifyConfig.callbackUrl,
+    scope: spotifyConfig.scopes.join(' '),
+    state,
+    code_challenge_method: 'S256',
+    code_challenge: codeChallenge,
+  });
+
+  const authorizeUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
+  return reply.redirect(authorizeUrl);
+});
+
+app.get('/api/oauth/spotify/callback', async (request, reply) => {
+  if (!spotifyConfig.clientId || !spotifyConfig.clientSecret) {
+    return reply.status(503).send({ error: 'Spotify OAuth not configured' });
+  }
+
+  const { code, state, error } = request.query;
+  if (error) {
+    return reply.status(400).send({ error, state });
+  }
+
+  if (!code || !state) {
+    return reply.status(400).send({ error: 'Missing code or state' });
+  }
+
+  const key = `pkce:${state}`;
+  let codeVerifier;
+  try {
+    codeVerifier = request.session.get(key);
+    // clear it
+    try { request.session.delete(key); } catch (e) { /* ignore */ }
+  } catch (e) {
+    request.log.warn(e, 'Failed to retrieve PKCE verifier from session');
+  }
+
+  if (!codeVerifier) {
+    return reply.status(400).send({ error: 'PKCE code_verifier missing or expired' });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set('grant_type', 'authorization_code');
+    params.set('code', code);
+    params.set('redirect_uri', spotifyConfig.callbackUrl);
+    params.set('code_verifier', codeVerifier);
+
+    const basic = Buffer.from(`${spotifyConfig.clientId}:${spotifyConfig.clientSecret}`).toString('base64');
+    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    if (!tokenRes.ok) {
+      const body = await tokenRes.text();
+      request.log.error({ status: tokenRes.status, body }, 'Spotify token exchange failed');
+      return reply.status(502).send({ error: 'Token exchange failed' });
+    }
+
+    const token = await tokenRes.json();
+    if (!token?.access_token) {
+      return reply.status(400).send({ error: 'Missing access token from Spotify' });
+    }
+
+    const profile = await fetchSpotifyProfile(token.access_token);
+    const user = await ensureDefaultUser();
+    const connected = await upsertConnectedAccount(
+      user.id,
+      profile.id,
+      profile.display_name || profile.id,
+      token.scope || spotifyConfig.scopes.join(' ')
+    );
+
+    await storeOAuthToken(connected.id, token);
+
+    // Friendly redirect back to UI (could be nicer)
+    return reply.redirect('/');
+  } catch (err) {
+    request.log.error(err, 'Spotify OAuth callback failed');
+    return reply.status(500).send({ error: err?.message ?? String(err) });
+  }
+});
+
 app.get('/api/events', async (request, reply) => {
   const filters = {};
   const { source, eventType } = request.query;
@@ -162,6 +388,38 @@ app.get('/api/events', async (request, reply) => {
     createdAt: event.createdAt.toISOString(),
     updatedAt: event.updatedAt.toISOString(),
   }));
+});
+
+app.get('/api/me', async (request, reply) => {
+  const user = await prisma.user.findFirst({
+    where: { email: defaultUserEmail },
+    include: { connectedAccounts: { include: { oauthTokens: true } } },
+  });
+
+  if (!user) return reply.status(404).send({ error: 'Default user not found' });
+
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    connectedAccounts: user.connectedAccounts.map((acc) => ({
+      id: acc.id,
+      provider: acc.provider,
+      providerAccountId: acc.providerAccountId,
+      displayName: acc.displayName,
+      scopes: acc.scopes,
+      status: acc.status,
+      oauthTokens: acc.oauthTokens.map((t) => ({
+        id: t.id,
+        accessToken: !!t.accessToken,
+        refreshToken: !!t.refreshToken,
+        expiresAt: t.expiresAt,
+        tokenType: t.tokenType,
+        scope: t.scope,
+        createdAt: t.createdAt,
+      })),
+    })),
+  };
 });
 
 app.get('/health', async () => ({ status: 'ok' }));

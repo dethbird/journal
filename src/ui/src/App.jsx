@@ -10,6 +10,11 @@ function App() {
           <p className="subtitle is-5">
             Fastify is serving this React app at <code>/</code>. OAuth callback and API endpoints will live here too.
           </p>
+          <div className="buttons mb-4">
+            <a className="button is-success" href="/api/oauth/spotify/start">
+              Authorize Spotify
+            </a>
+          </div>
           <div className="box">
             <p className="is-size-5 has-text-weight-semibold">Next steps</p>
             <ul className="mt-2">

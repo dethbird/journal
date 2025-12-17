@@ -116,6 +116,8 @@ model OAuthToken {
   expiresAt           DateTime?
   tokenType           String?
   scope               String?
+  idToken             String?
+  tokenJson           Json?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   connectedAccount    ConnectedAccount  @relation(fields: [connectedAccountId], references: [id])

@@ -22,7 +22,10 @@
   "dependencies": {
     "@fastify/cors": "^8.4.0",
     "@fastify/static": "^7.0.2",
+    "@fastify/oauth2": "^7.5.0",
     "imapflow": "^1.0.0",
+    "@fastify/cookie": "^7.4.0",
+    "@fastify/secure-session": "^7.5.1",
     "mailparser": "^3.6.9",
     "@octokit/rest": "^20.0.0",
     "@prisma/client": "^5.22.0",
