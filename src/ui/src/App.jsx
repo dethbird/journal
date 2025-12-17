@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
-
-const CONNECT_PROVIDERS = [
-  { id: 'spotify', name: 'Spotify', start: '/api/oauth/spotify/start' },
-  { id: 'github', name: 'GitHub', start: '/api/oauth/github/start' },
-];
+import Digest from './components/Digest';
+import Settings from './components/Settings';
+import { CONNECT_PROVIDERS } from './constants';
 
 const LoginView = () => (
   <div className="box">
@@ -20,88 +18,17 @@ const LoginView = () => (
   </div>
 );
 
-const HomeView = ({ user, onLogout, onDisconnect }) => (
-  <div>
-    <div className="level mb-4">
-      <div className="level-left" />
-      <div className="level-right">
-        <div className="buttons">
-          <button className="button is-light" title="Settings">
-            <span className="icon">
-              <i className="fa-solid fa-cog" />
-            </span>
-          </button>
-          <button className="button is-light" title="Logout" aria-label="Logout" onClick={onLogout}>
-            <span className="icon">
-              <i className="fa-solid fa-right-from-bracket" />
-            </span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <p className="subtitle is-6 has-text-grey">Evidence Journal</p>
-    <h1 className="title is-2">Hello, {user.displayName || 'friend'}</h1>
-    <p className="subtitle is-5">Welcome to your digest</p>
-
-    <div className="box">
-      <p className="is-size-5 has-text-weight-semibold">Connected accounts</p>
-      <div className="mt-2">
-        {CONNECT_PROVIDERS.map((p) => {
-          const connected = (user.connectedAccounts || []).find((acc) => acc.provider === p.id);
-          if (connected) {
-            return (
-              <div key={p.id} className="box">
-                <div className="level">
-                  <div className="level-left">
-                    <div>
-                      <p className="is-size-6 has-text-weight-semibold">{p.name}</p>
-                      <p>{connected.displayName || connected.providerAccountId}</p>
-                      {connected.scopes && <p className="is-size-7 has-text-grey">{connected.scopes}</p>}
-                    </div>
-                  </div>
-                  <div className="level-right">
-                    <div className="buttons">
-                      <button
-                        className="button is-light"
-                        onClick={async () => {
-                          try {
-                            await onDisconnect(p.id);
-                          } catch (e) {
-                            /* ignore */
-                          }
-                        }}
-                      >
-                        <span className="icon">
-                          <i className="fa-solid fa-unlink" />
-                        </span>
-                        <span>Disconnect</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div key={p.id} className="mt-2">
-              <a className="button is-primary" href={p.start}>
-                <span className="icon">
-                  <i className={`fa-brands fa-${p.id}`} />
-                </span>
-                <span>Authorize {p.name}</span>
-              </a>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  </div>
-);
+// Home header + routing will render Digest or Settings below
 
 function App() {
   const [state, setState] = useState({ loading: true, user: null, error: null });
+  const [path, setPath] = useState(window.location.pathname || '/');
+
+  useEffect(() => {
+    const onPop = () => setPath(window.location.pathname || '/');
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -135,43 +62,106 @@ function App() {
           {!state.loading && state.error && <p className="has-text-danger">{state.error}</p>}
           {!state.loading && !state.error && !state.user && <LoginView />}
           {!state.loading && !state.error && state.user && (
-            <HomeView
-              user={state.user}
-              onLogout={async () => {
-                try {
-                  await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-                } catch (e) {
-                  /* ignore */
-                }
-                setState({ loading: false, user: null, error: null });
-              }}
-              onDisconnect={async (provider) => {
-                try {
-                  await fetch('/api/disconnect', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ provider }),
-                  });
-                } catch (e) {
-                  /* ignore */
-                }
+            <div>
+              <div className="level mb-4">
+                <div className="level-left">
+                  <div>
+                    <p className="subtitle is-6 has-text-grey">Evidence Journal</p>
+                    <h1 className="title is-2">Hello, {state.user.displayName || 'friend'}</h1>
+                  </div>
+                </div>
+                <div className="level-right">
+                  <div className="buttons">
+                    <button
+                      className="button is-light"
+                      title="Digest"
+                      aria-label="Digest"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.history.pushState({}, '', '/');
+                        setPath('/');
+                      }}
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-house" />
+                      </span>
+                    </button>
+                    <a
+                      href="/settings"
+                      className="button is-light"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.history.pushState({}, '', '/settings');
+                        setPath('/settings');
+                      }}
+                      title="Settings"
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-cog" />
+                      </span>
+                    </a>
+                    <button
+                      className="button is-light"
+                      title="Logout"
+                      aria-label="Logout"
+                      onClick={async () => {
+                        try {
+                          await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+                        } catch (e) {
+                          /* ignore */
+                        }
+                        setState({ loading: false, user: null, error: null });
+                        // navigate home
+                        window.history.pushState({}, '', '/');
+                        setPath('/');
+                      }}
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-right-from-bracket" />
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-                // refresh user
-                setState({ loading: true, user: null, error: null });
-                try {
-                  const res = await fetch('/api/me', { credentials: 'include' });
-                  if (res.ok) {
-                    const data = await res.json();
-                    setState({ loading: false, user: data, error: null });
-                    return;
-                  }
-                } catch (e) {
-                  /* ignore */
-                }
-                setState({ loading: false, user: null, error: null });
-              }}
-            />
+              <div>
+                {path === '/settings' ? (
+                  <Settings
+                    user={state.user}
+                    onDisconnect={async (provider) => {
+                      try {
+                        await fetch('/api/disconnect', {
+                          method: 'POST',
+                          credentials: 'include',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ provider }),
+                        });
+                      } catch (e) {
+                        /* ignore */
+                      }
+
+                      // refresh user
+                      setState({ loading: true, user: null, error: null });
+                      try {
+                        const res = await fetch('/api/me', { credentials: 'include' });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setState({ loading: false, user: data, error: null });
+                          return;
+                        }
+                      } catch (e) {
+                        /* ignore */
+                      }
+                      setState({ loading: false, user: null, error: null });
+                    }}
+                  />
+                ) : (
+                  <div>
+                    <Digest />
+                  </div>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>
