@@ -3,77 +3,79 @@
 A Fastify API + React UI monolith that collects personal activity events, stores them in Postgres via Prisma, and can produce digest-friendly data while also serving a SPA frontend.
 
 ## Current capabilities
+```markdown
+# Evidence Journal
 
-- Fastify server in `src/web/server.js` powers:
-  - SPA hosting of the Vite-built React app (`src/ui`).
-  - API endpoints for days (`/api/days`, `/api/days/:date`) and events (`/api/events`).
-  - Health and OAuth callback scaffolding.
-- Prisma schema (`prisma/schema.prisma`) models `Event`, `Cursor`, `Day`, `DayEvent`, and a minimal identity stack (users, connected accounts, OAuth tokens).
-- Collector runner (`src/collector/runner.js`) persists JSON events and cursor state into Postgres.
-- GitHub collector (`src/collector/sources/github.js`) fetches authenticated-user events, dedupes by event ID, and stores them as journal events, while the helper (`src/collector/githubAuth.js`) resolves OAuth tokens from the `OAuthToken` table (fallback to `GITHUB_TOKEN`).
-- Email bookmarks collector (`src/collector/sources/emailBookmarks.js`) pulls IMAP mail, extracts links, emits one `BookmarkEvent` per message, and moves processed messages into a configured folder while advancing a UID cursor.
-- Vite + React UI scaffolding in `src/ui` renders a Bulma-styled hero (future UI will hook into the API).
+A Fastify monolith that collects personal activity events, serves a React SPA, and stores data in Postgres via Prisma. The project supports per-user connected accounts, per-account collector cursors, and per-account Email Bookmark settings.
+
+## What’s changed (recent)
+
+- Email bookmark IMAP settings were moved from global env vars into per-account `EmailBookmarkSettings` stored in the DB and managed via the Settings UI.
+- Collectors may expose a per-account function (`collectForAccount(account)`); the runner will call those per connected account. Legacy global collectors still work.
+- Cursors are scoped by `connectedAccountId` in the `Cursor` table so different users do not share cursor state.
+
+## Current capabilities
+
+- Fastify server in `src/web/server.js`:
+  - Hosts the Vite-built React app (`src/ui`).
+  - API endpoints for days and events, plus OAuth callbacks.
+- Prisma models include `User`, `ConnectedAccount`, `OAuthToken`, `Event` (with `userId`), `Cursor` (scoped to `connectedAccountId`), and `EmailBookmarkSettings`.
+- Collector runner persists events and cursor state to Postgres and supports per-account collectors.
+- GitHub collector (`src/collector/sources/github.js`) uses stored OAuth tokens per connected account and stamps events with `userId`.
+- Email bookmarks collector (`src/collector/sources/emailBookmarks.js`) reads IMAP settings per connected account, extracts links into `BookmarkEvent`s, moves processed messages, and stores per-account UID cursors.
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and fill in secrets (Postgres URL, SMTP, GitHub OAuth credentials, optional fallback token):
+1. Copy `.env.example` to `.env` and fill in essential secrets (Postgres URL, OAuth client IDs/secrets):
    ```bash
    cp .env.example .env
-   ```
-2. Install dependencies:
-   ```bash
    npm install
    ```
-3. Reset the database after editing Prisma schema:
-   ```bash
-   npx prisma migrate reset --force
-   ```
-4. Build the UI for production use:
+2. Build the UI (optional for production build):
    ```bash
    npm run ui:build
    ```
-5. Start the server:
+3. Start the server:
    ```bash
    npm start
    ```
-6. Run the collectors (a systemd timer or cron can call this):
+4. Run collectors manually for testing:
    ```bash
    npm run collector:run
    ```
 
-## Database and Prisma
+Useful dev scripts:
+```bash
+npm run reset-events    # clear event-related tables
+npm run reset-cursor    # reset cursors
+npm run collector:run   # run collectors once
+```
 
-- Prisma client helper: `src/lib/prismaClient.js`.
-- Schema and migrations live under `prisma/`.
-- Events are stored raw with JSON payloads (deduped by `externalId`).
-- OAuth tokens are expected to be stored in `OAuthToken`; collector looks up the latest GitHub token before making API calls.
+## Email Bookmark Settings (per-user)
 
-## Collectors
+- The global `EMAIL_BOOKMARK_*` env vars are deprecated for per-user collection. Configure IMAP host/port/username/password/mailbox per `ConnectedAccount` using the Settings UI at `/settings` or the API endpoints `/api/email-bookmark/settings`.
+- The collector uses a per-account numeric UID cursor (stored in `Cursor` with `connectedAccountId`) and will fetch unseen mail when no cursor exists.
 
-- Collector registry is in `src/collector/registry.js`; add new collectors via `registerCollector({ source, collect })`.
-- GitHub collector stores authenticated events by paging the Events API (`src/collector/sources/github.js`).
-- Email bookmarks collector uses IMAP to pull messages, extract URLs, store them as `BookmarkEvent` payloads with a `links` array, and moves processed mail to a destination folder (`src/collector/sources/emailBookmarks.js`).
-- Collector CLI entrypoint `src/collector/run.js` wires into the runner and disconnects Prisma on exit.
+## Collectors and how to add new ones
 
-### Email bookmarks collector config
+- Register a collector with `registerCollector({ source, collect, collectForAccount })` in `src/collector/registry.js`.
+  - `collect(cursor)` is the legacy global collector signature.
+  - `collectForAccount(account)` is the newer per-account signature; the runner will call it for each active connected account for that source.
+- Existing collectors: `github` and `email_bookmarks` both expose `collectForAccount`.
 
-Set these env vars (see `.env.example`):
-- `EMAIL_BOOKMARK_IMAP_HOST`, `EMAIL_BOOKMARK_IMAP_PORT`, `EMAIL_BOOKMARK_IMAP_SECURE`
-- `EMAIL_BOOKMARK_USERNAME`, `EMAIL_BOOKMARK_PASSWORD`
-- `EMAIL_BOOKMARK_MAILBOX` (default `INBOX`)
-- `EMAIL_BOOKMARK_PROCESSED_MAILBOX` (default `INBOX/Processed`)
+## OAuth and tokens
 
-The collector uses the last seen UID as its cursor; when no cursor exists, it fetches unseen mail. Each email becomes one `BookmarkEvent` with `payload.links` as an array of `{ url, text }`, and messages are moved to the processed mailbox after processing.
+- OAuth flows create `ConnectedAccount` and `OAuthToken` rows. Collectors look up the latest `OAuthToken` for a `ConnectedAccount` and use it when available.
+
+## Troubleshooting
+
+- If collectors return zero new items, confirm per-account cursor values in the `cursor` table and that ConnectedAccounts have valid tokens/settings.
+- For IMAP problems, inspect collector logs — the IMAP client retries transient connection errors but will log socket timeouts and connection faults.
 
 ## Next steps
 
-1. Implement OAuth flow to populate `ConnectedAccount` + `OAuthToken`, request `offline_access` (or GitHub equivalent) so refresh tokens can be stored.
-2. Add digest generator/email sender that queries yesterday’s events and emails you (via nodemailer or similar).
-3. Expand the React UI to read `/api/days` and `/api/events`, display evidence-first day views, and let you write mood/notes/highlights.
-4. Add more collectors (`imap`, `drive`, `photos`, etc.) once the event schema and digest workflow stabilize.
+- Expand the React UI to show connected accounts, per-account settings, and digests.
+- Add more per-account collectors (Drive, Photos, other IMAP accounts) and enrichers.
 
-## Tips
-
-- Use `GITHUB_TOKEN` env var as a temporary PAT; the collector prefers OAuth tokens stored via `src/collector/githubAuth.js`.
-- The `collector:run` script can be invoked from a systemd timer/cron for regular updates.
-- Prisma migrations can be inspected under `prisma/migrations/`; regenerating the client is done via `npx prisma generate` if the schema changes.
+```
+- Email bookmark IMAP settings are moved out of global env vars and into per-account `EmailBookmarkSettings` stored in the DB; these are managed in the Settings UI (per ConnectedAccount).
