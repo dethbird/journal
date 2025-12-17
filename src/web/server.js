@@ -39,6 +39,28 @@ const getSessionKey = () => {
   return Buffer.from(s);
 };
 
+const signSession = (userId) => {
+  const secret = process.env.SESSION_SECRET || 'dev-secret';
+  const payload = Buffer.from(userId, 'utf8').toString('base64url');
+  const sig = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+};
+
+const verifySession = (token) => {
+  if (!token) return null;
+  const secret = process.env.SESSION_SECRET || 'dev-secret';
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [payload, sig] = parts;
+  const expected = crypto.createHmac('sha256', secret).update(payload).digest('base64url');
+  if (!crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))) return null;
+  try {
+    return Buffer.from(payload, 'base64url').toString('utf8');
+  } catch (e) {
+    return null;
+  }
+};
+
 const base64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
 const sha256 = (str) => crypto.createHash('sha256').update(str).digest();
@@ -111,6 +133,18 @@ const findOrCreateUserFromConnectedAccount = async ({ email, displayName }) => {
   return prisma.user.create({ data });
 };
 
+const getSessionUser = async (request) => {
+  const userId = verifySession(request.cookies?.journal_auth);
+  if (!userId) {
+    return null;
+  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: { connectedAccounts: { include: { oauthTokens: true } } },
+  });
+  return user;
+};
+
 const upsertConnectedAccount = async (userId, providerAccountId, displayName, scopes) => {
   return prisma.connectedAccount.upsert({
     where: {
@@ -174,10 +208,12 @@ app.register(fastifyStatic, {
 app.register(fastifyCookie);
 app.register(secureSession, {
   key: getSessionKey(),
+  cookieName: 'journal_ss',
   cookie: {
     path: '/',
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
   },
 });
 
@@ -270,7 +306,9 @@ app.get('/api/oauth/spotify/start', async (request, reply) => {
 
   // store verifier keyed by state
   try {
-    request.session.set(`pkce:${state}`, codeVerifier);
+    await request.session.set(`pkce:${state}`, codeVerifier);
+    app.log.info({ state }, 'Stored PKCE code_verifier in session');
+    app.log.info({ setCookie: reply.getHeader('set-cookie') }, 'PKCE set-cookie header after set');
   } catch (e) {
     request.log.warn(e, 'Failed to store PKCE verifier in session');
   }
@@ -360,6 +398,15 @@ app.get('/api/oauth/spotify/callback', async (request, reply) => {
 
     await storeOAuthToken(connected.id, token);
 
+    const signed = signSession(user.id);
+    reply.setCookie('journal_auth', signed, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
+    app.log.info({ userId: user.id, cookieSet: reply.getHeader('set-cookie') }, 'Set journal_auth cookie after OAuth');
+
     // Friendly redirect back to UI (could be nicer)
     return reply.redirect('/');
   } catch (err) {
@@ -415,12 +462,12 @@ app.get('/api/events', async (request, reply) => {
 });
 
 app.get('/api/me', async (request, reply) => {
-  const user = await prisma.user.findFirst({
-    where: { email: defaultUserEmail },
-    include: { connectedAccounts: { include: { oauthTokens: true } } },
-  });
-
-  if (!user) return reply.status(404).send({ error: 'Default user not found' });
+  app.log.info({ cookies: request.headers.cookie, signed: request.cookies?.journal_auth }, '👀 /api/me cookies');
+  const user = await getSessionUser(request);
+  if (!user) {
+    app.log.info('API /api/me returning 401');
+    return reply.status(401).send({ error: 'Not authenticated' });
+  }
 
   return {
     id: user.id,
