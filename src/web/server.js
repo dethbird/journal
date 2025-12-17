@@ -665,6 +665,27 @@ app.post('/api/logout', async (request, reply) => {
   return { ok: true };
 });
 
+app.post('/api/disconnect', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { provider } = request.body ?? {};
+  if (!provider) return reply.status(400).send({ error: 'provider required' });
+
+  try {
+    const existing = await prisma.connectedAccount.findFirst({ where: { userId: user.id, provider } });
+    if (!existing) return reply.status(404).send({ error: 'Connected account not found' });
+
+    await prisma.oAuthToken.deleteMany({ where: { connectedAccountId: existing.id } });
+    await prisma.connectedAccount.delete({ where: { id: existing.id } });
+
+    return { ok: true };
+  } catch (err) {
+    request.log.error(err, 'Failed to disconnect provider');
+    return reply.status(500).send({ error: 'Disconnect failed' });
+  }
+});
+
 app.get('/oauth/callback', async (request, reply) => {
   const { code, state, error } = request.query;
 

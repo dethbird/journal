@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from 'react';
 
+const CONNECT_PROVIDERS = [
+  { id: 'spotify', name: 'Spotify', start: '/api/oauth/spotify/start' },
+  { id: 'github', name: 'GitHub', start: '/api/oauth/github/start' },
+];
+
 const LoginView = () => (
   <div className="box">
     <p className="subtitle is-5 mb-3">You are not logged in.</p>
@@ -15,7 +20,7 @@ const LoginView = () => (
   </div>
 );
 
-const HomeView = ({ user, onLogout }) => (
+const HomeView = ({ user, onLogout, onDisconnect }) => (
   <div>
     <div className="level mb-4">
       <div className="level-left" />
@@ -26,12 +31,7 @@ const HomeView = ({ user, onLogout }) => (
               <i className="fa-solid fa-cog" />
             </span>
           </button>
-          <button
-            className="button is-light"
-            title="Logout"
-            aria-label="Logout"
-            onClick={onLogout}
-          >
+          <button className="button is-light" title="Logout" aria-label="Logout" onClick={onLogout}>
             <span className="icon">
               <i className="fa-solid fa-right-from-bracket" />
             </span>
@@ -39,24 +39,65 @@ const HomeView = ({ user, onLogout }) => (
         </div>
       </div>
     </div>
+
     <p className="subtitle is-6 has-text-grey">Monolith server</p>
     <h1 className="title is-2">Hello, {user.displayName || 'friend'}</h1>
     <p className="subtitle is-5">
       You are logged in. Fastify is serving this React app at <code>/</code>.
     </p>
+
     <div className="box">
       <p className="is-size-5 has-text-weight-semibold">Connected accounts</p>
-      {user.connectedAccounts?.length ? (
-        <ul className="mt-2">
-          {user.connectedAccounts.map((acc) => (
-            <li key={acc.id}>
-              <strong>{acc.provider}</strong> – {acc.displayName || acc.providerAccountId}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2">No connected accounts.</p>
-      )}
+      <div className="mt-2">
+        {CONNECT_PROVIDERS.map((p) => {
+          const connected = (user.connectedAccounts || []).find((acc) => acc.provider === p.id);
+          if (connected) {
+            return (
+              <div key={p.id} className="box">
+                <div className="level">
+                  <div className="level-left">
+                    <div>
+                      <p className="is-size-6 has-text-weight-semibold">{p.name}</p>
+                      <p>{connected.displayName || connected.providerAccountId}</p>
+                      {connected.scopes && <p className="is-size-7 has-text-grey">{connected.scopes}</p>}
+                    </div>
+                  </div>
+                  <div className="level-right">
+                    <div className="buttons">
+                      <button
+                        className="button is-light"
+                        onClick={async () => {
+                          try {
+                            await onDisconnect(p.id);
+                          } catch (e) {
+                            /* ignore */
+                          }
+                        }}
+                      >
+                        <span className="icon">
+                          <i className="fa-solid fa-unlink" />
+                        </span>
+                        <span>Disconnect</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div key={p.id} className="mt-2">
+              <a className="button is-primary" href={p.start}>
+                <span className="icon">
+                  <i className={`fa-brands fa-${p.id}`} />
+                </span>
+                <span>Authorize {p.name}</span>
+              </a>
+            </div>
+          );
+        })}
+      </div>
     </div>
   </div>
 );
@@ -101,6 +142,32 @@ function App() {
               onLogout={async () => {
                 try {
                   await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+                } catch (e) {
+                  /* ignore */
+                }
+                setState({ loading: false, user: null, error: null });
+              }}
+              onDisconnect={async (provider) => {
+                try {
+                  await fetch('/api/disconnect', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ provider }),
+                  });
+                } catch (e) {
+                  /* ignore */
+                }
+
+                // refresh user
+                setState({ loading: true, user: null, error: null });
+                try {
+                  const res = await fetch('/api/me', { credentials: 'include' });
+                  if (res.ok) {
+                    const data = await res.json();
+                    setState({ loading: false, user: data, error: null });
+                    return;
+                  }
                 } catch (e) {
                   /* ignore */
                 }
