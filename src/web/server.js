@@ -29,6 +29,13 @@ const spotifyConfig = {
   scopes: (process.env.SPOTIFY_SCOPES || 'user-read-email').split(/\s+/).filter(Boolean),
 };
 
+const githubConfig = {
+  clientId: process.env.GITHUB_CLIENT_ID,
+  clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  callbackUrl: process.env.GITHUB_CALLBACK_URL || 'http://localhost:3000/api/oauth/github/callback',
+  scopes: (process.env.GITHUB_SCOPES || 'read:user user:email').split(/\s+/).filter(Boolean),
+};
+
 const getSessionKey = () => {
   const s = process.env.SESSION_SECRET;
   if (!s) return crypto.randomBytes(32);
@@ -145,12 +152,12 @@ const getSessionUser = async (request) => {
   return user;
 };
 
-const upsertConnectedAccount = async (userId, providerAccountId, displayName, scopes) => {
+const upsertConnectedAccount = async (userId, provider, providerAccountId, displayName, scopes) => {
   return prisma.connectedAccount.upsert({
     where: {
       userId_provider_providerAccountId: {
         userId,
-        provider: 'spotify',
+        provider,
         providerAccountId,
       },
     },
@@ -160,7 +167,7 @@ const upsertConnectedAccount = async (userId, providerAccountId, displayName, sc
     },
     create: {
       userId,
-      provider: 'spotify',
+      provider,
       providerAccountId,
       displayName,
       scopes,
@@ -197,6 +204,32 @@ const fetchSpotifyProfile = async (accessToken) => {
     throw new Error(`Spotify profile fetch failed (${res.status})`);
   }
   return res.json();
+};
+
+const fetchGithubProfile = async (accessToken) => {
+  const headers = { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'journal-app' };
+  const res = await fetch('https://api.github.com/user', { headers });
+  if (!res.ok) {
+    throw new Error(`GitHub profile fetch failed (${res.status})`);
+  }
+  const profile = await res.json();
+
+  if (!profile.email) {
+    try {
+      const emailsRes = await fetch('https://api.github.com/user/emails', { headers });
+      if (emailsRes.ok) {
+        const emails = await emailsRes.json();
+        const primary = emails.find((e) => e.primary && e.verified) || emails.find((e) => e.primary) || emails[0];
+        if (primary?.email) {
+          profile.email = primary.email;
+        }
+      }
+    } catch (e) {
+      // ignore email lookup failure
+    }
+  }
+
+  return profile;
 };
 
 app.register(fastifyStatic, {
@@ -327,6 +360,29 @@ app.get('/api/oauth/spotify/start', async (request, reply) => {
   return reply.redirect(authorizeUrl);
 });
 
+app.get('/api/oauth/github/start', async (request, reply) => {
+  if (!githubConfig.clientId || !githubConfig.clientSecret) {
+    return reply.status(503).send({ error: 'GitHub OAuth not configured' });
+  }
+
+  const state = crypto.randomBytes(16).toString('hex');
+  try {
+    await request.session.set(`ghstate:${state}`, true);
+  } catch (e) {
+    request.log.warn(e, 'Failed to store GitHub OAuth state in session');
+  }
+
+  const params = new URLSearchParams({
+    client_id: githubConfig.clientId,
+    redirect_uri: githubConfig.callbackUrl,
+    scope: githubConfig.scopes.join(' '),
+    state,
+  });
+
+  const authorizeUrl = `https://github.com/login/oauth/authorize?${params.toString()}`;
+  return reply.redirect(authorizeUrl);
+});
+
 app.get('/api/oauth/spotify/callback', async (request, reply) => {
   if (!spotifyConfig.clientId || !spotifyConfig.clientSecret) {
     return reply.status(503).send({ error: 'Spotify OAuth not configured' });
@@ -391,6 +447,7 @@ app.get('/api/oauth/spotify/callback', async (request, reply) => {
     });
     const connected = await upsertConnectedAccount(
       user.id,
+      'spotify',
       profile.id,
       derivedDisplayName,
       token.scope || spotifyConfig.scopes.join(' ')
@@ -411,6 +468,106 @@ app.get('/api/oauth/spotify/callback', async (request, reply) => {
     return reply.redirect('/');
   } catch (err) {
     request.log.error(err, 'Spotify OAuth callback failed');
+    return reply.status(500).send({ error: err?.message ?? String(err) });
+  }
+});
+
+app.get('/api/oauth/github/callback', async (request, reply) => {
+  if (!githubConfig.clientId || !githubConfig.clientSecret) {
+    return reply.status(503).send({ error: 'GitHub OAuth not configured' });
+  }
+
+  const { code, state, error } = request.query;
+  if (error) {
+    return reply.status(400).send({ error, state });
+  }
+
+  if (!code || !state) {
+    return reply.status(400).send({ error: 'Missing code or state' });
+  }
+
+  const key = `ghstate:${state}`;
+  let stateOk = false;
+  try {
+    stateOk = !!request.session.get(key);
+    try { request.session.delete(key); } catch (e) { /* ignore */ }
+  } catch (e) {
+    request.log.warn(e, 'Failed to retrieve GitHub OAuth state from session');
+  }
+
+  if (!stateOk) {
+    return reply.status(400).send({ error: 'Invalid or expired state' });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set('client_id', githubConfig.clientId);
+    params.set('client_secret', githubConfig.clientSecret);
+    params.set('code', code);
+    params.set('redirect_uri', githubConfig.callbackUrl);
+    params.set('state', state);
+
+    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    let token;
+    try {
+      const text = await tokenRes.text();
+      try {
+        token = JSON.parse(text);
+      } catch (parseErr) {
+        request.log.error({ status: tokenRes.status, body: text }, 'GitHub token exchange returned non-JSON');
+        return reply.status(502).send({ error: 'Token exchange failed (invalid response)' });
+      }
+    } catch (err) {
+      request.log.error(err, 'Failed to read GitHub token response');
+      return reply.status(502).send({ error: 'Token exchange failed' });
+    }
+
+    if (!tokenRes.ok) {
+      request.log.error({ status: tokenRes.status, token }, 'GitHub token exchange failed');
+      return reply.status(502).send({ error: 'Token exchange failed' });
+    }
+    if (!token?.access_token) {
+      return reply.status(400).send({ error: 'Missing access token from GitHub' });
+    }
+
+    const profile = await fetchGithubProfile(token.access_token);
+    const derivedDisplayName = profile.name?.trim() || profile.login || defaultUserEmail || 'GitHub User';
+    const providerAccountId = String(profile.id || profile.login || derivedDisplayName);
+    const user = await findOrCreateUserFromConnectedAccount({
+      email: profile.email ?? null,
+      displayName: derivedDisplayName,
+    });
+
+    const connected = await upsertConnectedAccount(
+      user.id,
+      'github',
+      providerAccountId,
+      derivedDisplayName,
+      token.scope || githubConfig.scopes.join(' ')
+    );
+
+    await storeOAuthToken(connected.id, token);
+
+    const signed = signSession(user.id);
+    reply.setCookie('journal_auth', signed, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
+    app.log.info({ userId: user.id, cookieSet: reply.getHeader('set-cookie') }, 'Set journal_auth cookie after GitHub OAuth');
+
+    return reply.redirect('/');
+  } catch (err) {
+    request.log.error(err, 'GitHub OAuth callback failed');
     return reply.status(500).send({ error: err?.message ?? String(err) });
   }
 });
@@ -494,6 +651,19 @@ app.get('/api/me', async (request, reply) => {
 });
 
 app.get('/health', async () => ({ status: 'ok' }));
+
+app.post('/api/logout', async (request, reply) => {
+  try {
+    // clear the client-side signed auth cookie
+    reply.clearCookie('journal_auth', { path: '/' });
+    // clear secure-session cookie if present
+    reply.clearCookie('journal_ss', { path: '/' });
+  } catch (err) {
+    request.log.warn(err, 'Failed to clear cookies during logout');
+  }
+
+  return { ok: true };
+});
 
 app.get('/oauth/callback', async (request, reply) => {
   const { code, state, error } = request.query;

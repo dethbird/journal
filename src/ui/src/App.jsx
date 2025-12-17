@@ -6,11 +6,39 @@ const LoginView = () => (
     <a className="button is-success" href="/api/oauth/spotify/start">
       Login with Spotify
     </a>
+    <a className="button is-dark ml-2" href="/api/oauth/github/start">
+      <span className="icon">
+        <i className="fa-brands fa-github" />
+      </span>
+      <span>Login with GitHub</span>
+    </a>
   </div>
 );
 
-const HomeView = ({ user }) => (
+const HomeView = ({ user, onLogout }) => (
   <div>
+    <div className="level mb-4">
+      <div className="level-left" />
+      <div className="level-right">
+        <div className="buttons">
+          <button className="button is-light" title="Settings">
+            <span className="icon">
+              <i className="fa-solid fa-cog" />
+            </span>
+          </button>
+          <button
+            className="button is-light"
+            title="Logout"
+            aria-label="Logout"
+            onClick={onLogout}
+          >
+            <span className="icon">
+              <i className="fa-solid fa-right-from-bracket" />
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
     <p className="subtitle is-6 has-text-grey">Monolith server</p>
     <h1 className="title is-2">Hello, {user.displayName || 'friend'}</h1>
     <p className="subtitle is-5">
@@ -67,7 +95,19 @@ function App() {
           {state.loading && <p className="subtitle">Loading…</p>}
           {!state.loading && state.error && <p className="has-text-danger">{state.error}</p>}
           {!state.loading && !state.error && !state.user && <LoginView />}
-          {!state.loading && !state.error && state.user && <HomeView user={state.user} />}
+          {!state.loading && !state.error && state.user && (
+            <HomeView
+              user={state.user}
+              onLogout={async () => {
+                try {
+                  await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+                } catch (e) {
+                  /* ignore */
+                }
+                setState({ loading: false, user: null, error: null });
+              }}
+            />
+          )}
         </div>
       </div>
     </section>
