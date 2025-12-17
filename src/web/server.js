@@ -91,6 +91,26 @@ const ensureDefaultUser = async () => {
   });
 };
 
+const findOrCreateUserFromConnectedAccount = async ({ email, displayName }) => {
+  const normalizedEmail = email?.trim() || null;
+  const normalizedDisplayName = displayName?.trim() || null;
+
+  if (normalizedEmail) {
+    const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existing) {
+      return existing;
+    }
+  }
+
+  const data = {};
+  if (normalizedEmail) {
+    data.email = normalizedEmail;
+  }
+  data.displayName = normalizedDisplayName || defaultUserEmail || 'Connected Account';
+
+  return prisma.user.create({ data });
+};
+
 const upsertConnectedAccount = async (userId, providerAccountId, displayName, scopes) => {
   return prisma.connectedAccount.upsert({
     where: {
@@ -326,11 +346,15 @@ app.get('/api/oauth/spotify/callback', async (request, reply) => {
     }
 
     const profile = await fetchSpotifyProfile(token.access_token);
-    const user = await ensureDefaultUser();
+    const derivedDisplayName = profile.display_name?.trim() || profile.id || defaultUserEmail || 'Connected Account';
+    const user = await findOrCreateUserFromConnectedAccount({
+      email: profile.email ?? null,
+      displayName: derivedDisplayName,
+    });
     const connected = await upsertConnectedAccount(
       user.id,
       profile.id,
-      profile.display_name || profile.id,
+      derivedDisplayName,
       token.scope || spotifyConfig.scopes.join(' ')
     );
 
