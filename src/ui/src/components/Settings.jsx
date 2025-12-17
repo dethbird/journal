@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { CONNECT_PROVIDERS } from '../constants';
 
+const formatDateTime = (value) => {
+  if (!value) return '';
+  try {
+    return new Date(value).toLocaleString();
+  } catch (e) {
+    return value;
+  }
+};
+
 function ConnectedAccountRow({ provider, connected, onDisconnect }) {
   return (
     <div className="box">
@@ -189,6 +198,152 @@ function EmailBookmarkSettingsForm() {
   );
 }
 
+function EmailDeliverySettingsForm() {
+  const [settings, setSettings] = useState({
+    provider: 'smtp',
+    fromEmail: '',
+    fromName: '',
+    digestSubject: 'Your Daily Digest',
+    host: '',
+    port: 587,
+    secure: false,
+    username: '',
+    password: '',
+    replyTo: '',
+    enabled: true,
+    lastSentAt: null,
+    passwordPresent: false,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/email-delivery', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+            if (data.settings)
+              setSettings((prev) => ({ ...prev, ...data.settings, password: '', passwordPresent: !!data.settings.passwordPresent }));
+        }
+      } catch (e) {
+        // ignore initial load failure
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const payload = { ...settings };
+      if (!payload.password) delete payload.password;
+      const res = await fetch('/api/email-delivery', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Save failed (${res.status})`);
+      }
+      const data = await res.json();
+      if (data.settings) setSettings((prev) => ({ ...prev, ...data.settings }));
+      setMessage('Saved');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage(null), 2500);
+    }
+  };
+
+  if (loading) return <p className="subtitle">Loading email delivery…</p>;
+
+  return (
+    <div className="box mt-4">
+      <p className="is-size-5 has-text-weight-semibold">Email delivery</p>
+      <form className="mt-3" onSubmit={handleSubmit}>
+        <div className="columns is-multiline">
+          <div className="column is-half">
+            <label className="label">From email</label>
+            <input className="input" type="email" value={settings.fromEmail} onChange={(e) => setSettings({ ...settings, fromEmail: e.target.value })} required />
+          </div>
+          <div className="column is-half">
+            <label className="label">From name</label>
+            <input className="input" value={settings.fromName} onChange={(e) => setSettings({ ...settings, fromName: e.target.value })} />
+          </div>
+
+          <div className="column is-half">
+            <label className="label">Digest subject</label>
+            <input className="input" value={settings.digestSubject} onChange={(e) => setSettings({ ...settings, digestSubject: e.target.value })} />
+          </div>
+
+          <div className="column is-half">
+            <label className="label">Host</label>
+            <input className="input" value={settings.host} onChange={(e) => setSettings({ ...settings, host: e.target.value })} />
+          </div>
+          <div className="column is-one-quarter">
+            <label className="label">Port</label>
+            <input className="input" type="number" value={settings.port} onChange={(e) => setSettings({ ...settings, port: Number(e.target.value) })} />
+          </div>
+          <div className="column is-one-quarter">
+            <label className="label">Secure</label>
+            <label className="checkbox mt-2">
+              <input type="checkbox" checked={settings.secure} onChange={(e) => setSettings({ ...settings, secure: e.target.checked })} /> Use TLS/SSL
+            </label>
+          </div>
+
+          <div className="column is-half">
+            <label className="label">Username</label>
+            <input className="input" value={settings.username} onChange={(e) => setSettings({ ...settings, username: e.target.value })} />
+          </div>
+          <div className="column is-half">
+            <label className="label">Password {settings.passwordPresent ? '(leave blank to keep existing)' : ''}</label>
+            <input className="input" type="password" value={settings.password} onChange={(e) => setSettings({ ...settings, password: e.target.value })} placeholder={settings.passwordPresent ? '••••••••' : ''} />
+          </div>
+
+          <div className="column is-half">
+            <label className="label">Reply-To</label>
+            <input className="input" value={settings.replyTo} onChange={(e) => setSettings({ ...settings, replyTo: e.target.value })} />
+          </div>
+
+          <div className="column is-one-quarter">
+            <label className="label">Enabled</label>
+            <label className="checkbox mt-2">
+              <input type="checkbox" checked={settings.enabled} onChange={(e) => setSettings({ ...settings, enabled: e.target.checked })} />{' '}
+              Send digest emails
+            </label>
+          </div>
+
+          {settings.lastSentAt ? (
+            <div className="column is-full">
+              <p className="is-size-7 has-text-grey">Last sent: {formatDateTime(settings.lastSentAt)}</p>
+            </div>
+          ) : null}
+        </div>
+        <div className="field is-grouped">
+          <div className="control">
+            <button className={`button is-primary${saving ? ' is-loading' : ''}`} type="submit">
+              Save
+            </button>
+          </div>
+          {message && <p className="help is-success">{message}</p>}
+          {error && <p className="help is-danger">{error}</p>}
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Settings({ user, onDisconnect }) {
   const connectedAccounts = user?.connectedAccounts || [];
 
@@ -216,6 +371,7 @@ export default function Settings({ user, onDisconnect }) {
         </div>
       </div>
 
+      <EmailDeliverySettingsForm />
       <EmailBookmarkSettingsForm />
     </div>
   );

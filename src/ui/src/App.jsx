@@ -23,6 +23,7 @@ const LoginView = () => (
 function App() {
   const [state, setState] = useState({ loading: true, user: null, error: null });
   const [path, setPath] = useState(window.location.pathname || '/');
+  const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname || '/');
@@ -68,6 +69,8 @@ function App() {
                   <div>
                     <p className="subtitle is-6 has-text-grey">Evidence Journal</p>
                     <h1 className="title is-2">Hello, {state.user.displayName || 'friend'}</h1>
+                    {sendState.message ? <p className="help is-success">{sendState.message}</p> : null}
+                    {sendState.error ? <p className="help is-danger">{sendState.error}</p> : null}
                   </div>
                 </div>
                 <div className="level-right">
@@ -84,6 +87,29 @@ function App() {
                     >
                       <span className="icon">
                         <i className="fa-solid fa-house" />
+                      </span>
+                    </button>
+                    <button
+                      className={`button is-light${sendState.sending ? ' is-loading' : ''}`}
+                      title="Send digest"
+                      aria-label="Send digest"
+                      onClick={async () => {
+                        setSendState({ sending: true, message: null, error: null });
+                        try {
+                          const res = await fetch('/api/digest/send', { method: 'POST', credentials: 'include' });
+                          if (!res.ok) {
+                            const body = await res.json().catch(() => ({}));
+                            throw new Error(body.error || `Send failed (${res.status})`);
+                          }
+                          setSendState({ sending: false, message: 'Sent!', error: null });
+                          setTimeout(() => setSendState((prev) => ({ ...prev, message: null })), 2500);
+                        } catch (err) {
+                          setSendState({ sending: false, message: null, error: err.message });
+                        }
+                      }}
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-envelope" />
                       </span>
                     </button>
                     <a

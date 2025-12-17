@@ -141,6 +141,7 @@ export default function Digest() {
     };
   }, []);
 
+
   if (state.loading) {
     return (
       <div className="box">
@@ -162,9 +163,7 @@ export default function Digest() {
     <div>
       <div className="box">
         <h2 className="title is-4">Digest</h2>
-        <p className="subtitle is-6">
-          Window: {formatTime(vm.window?.start)} → {formatTime(vm.window?.end)}
-        </p>
+        <p className="subtitle is-6">Window: {formatTime(vm.window?.start)} → {formatTime(vm.window?.end)}</p>
         {!vm.sections?.length && <p className="has-text-grey">No events in this window.</p>}
       </div>
 

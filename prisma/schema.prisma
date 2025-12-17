@@ -85,6 +85,7 @@ model User {
   authIdentities    AuthIdentity[]
   connectedAccounts ConnectedAccount[]
   events            Event[]
+  emailDelivery     UserEmailDelivery?
 }
 
 model AuthIdentity {
@@ -118,6 +119,31 @@ model ConnectedAccount {
 
   @@unique([userId, provider, providerAccountId])
   @@index([userId, provider])
+}
+
+model UserEmailDelivery {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+
+  provider    String   @default("smtp")
+  fromEmail   String
+  fromName    String?
+
+  host        String
+  port        Int
+  secure      Boolean  @default(false)
+  username    String
+  password    String
+
+  replyTo     String?
+  digestSubject String  @default("Your Daily Digest")
+  enabled     Boolean  @default(true)
+
+  lastSentAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
 }
 
 model EmailBookmarkSettings {

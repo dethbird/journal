@@ -7,9 +7,12 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import nodemailer from 'nodemailer';
 
 import prisma from '../lib/prismaClient.js';
 import buildDigestViewModel from '../digest/viewModel.js';
+import { renderEmailHtml } from '../digest/renderers/email.js';
+import { renderTextDigest } from '../digest/renderers/text.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -164,6 +167,85 @@ const serializeEmailBookmarkSettings = (settings) => {
     username: settings.username,
     passwordPresent: !!settings.password,
   };
+};
+
+const serializeEmailDelivery = (delivery) => {
+  if (!delivery) return null;
+  return {
+    provider: delivery.provider,
+    fromEmail: delivery.fromEmail,
+    fromName: delivery.fromName,
+    host: delivery.host,
+    port: delivery.port,
+    secure: delivery.secure,
+    username: delivery.username,
+    passwordPresent: !!delivery.password,
+    digestSubject: delivery.digestSubject,
+    replyTo: delivery.replyTo,
+    enabled: delivery.enabled,
+    lastSentAt: delivery.lastSentAt,
+  };
+};
+
+const getOrCreateEmailDelivery = async (userId, fallbackEmail, displayName) => {
+  const existing = await prisma.userEmailDelivery.findUnique({ where: { userId } });
+  if (existing) return existing;
+
+  return prisma.userEmailDelivery.create({
+    data: {
+      userId,
+      provider: 'smtp',
+      fromEmail: fallbackEmail || defaultUserEmail,
+      fromName: displayName || null,
+      host: '',
+      port: 587,
+      secure: false,
+      username: '',
+      password: '',
+      digestSubject: 'Your Daily Digest',
+      replyTo: null,
+      enabled: false,
+    },
+  });
+};
+
+const getSmtpTransportForDelivery = (delivery) => {
+  const host = delivery.host;
+  const port = Number(delivery.port || 587);
+  const user = delivery.username;
+  const pass = delivery.password;
+  const secure = !!delivery.secure || port === 465;
+
+  if (!host || !user || !pass) {
+    throw new Error('SMTP delivery settings incomplete (host/username/password required)');
+  }
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+  });
+};
+
+const sendDigestEmail = async ({ user, vm, delivery }) => {
+  if (delivery.provider !== 'smtp') {
+    throw new Error(`Unsupported delivery provider: ${delivery.provider}`);
+  }
+  const transport = getSmtpTransportForDelivery(delivery);
+  const html = renderEmailHtml(vm);
+  const text = renderTextDigest(vm);
+  const from = delivery.fromName ? `${delivery.fromName} <${delivery.fromEmail}>` : delivery.fromEmail;
+  const to = delivery.replyTo || delivery.fromEmail;
+
+  return transport.sendMail({
+    from,
+    to: vm.userEmail || to,
+    subject: delivery.digestSubject || 'Your Daily Digest',
+    text,
+    html,
+    replyTo: delivery.replyTo || undefined,
+  });
 };
 
 const upsertConnectedAccount = async (userId, provider, providerAccountId, displayName, scopes) => {
@@ -631,6 +713,42 @@ app.get('/api/digest', async (request, reply) => {
   }
 });
 
+app.post('/api/digest/send', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) {
+    return reply.status(401).send({ error: 'Not authenticated' });
+  }
+
+  const hours = Number(request.body?.hours ?? request.query?.hours ?? 24);
+  try {
+    const delivery = await prisma.userEmailDelivery.findUnique({ where: { userId: user.id } });
+    if (!delivery) {
+      return reply.status(400).send({ error: 'Email delivery not configured' });
+    }
+
+    if (!delivery.enabled) {
+      return reply.status(400).send({ error: 'Email delivery is disabled' });
+    }
+
+    const vm = await buildDigestViewModel({ userId: user.id, rangeHours: hours });
+    // attach recipient info for renderer (use user's email if available)
+    vm.userEmail = user.email || delivery.fromEmail;
+
+    const info = await sendDigestEmail({ user, vm, delivery });
+
+    const now = new Date();
+    await prisma.userEmailDelivery.update({
+      where: { userId: user.id },
+      data: { lastSentAt: now },
+    });
+
+    return { ok: true, messageId: info.messageId, settings: serializeEmailDelivery({ ...delivery, lastSentAt: now }) };
+  } catch (err) {
+    request.log.error(err, 'Failed to send digest email');
+    return reply.status(500).send({ error: err?.message || 'Failed to send digest email' });
+  }
+});
+
 app.get('/api/events', async (request, reply) => {
   const filters = {};
   const { source, eventType } = request.query;
@@ -707,6 +825,78 @@ app.get('/api/me', async (request, reply) => {
       })),
     })),
   };
+});
+
+app.get('/api/email-delivery', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const delivery = await getOrCreateEmailDelivery(user.id, user.email || defaultUserEmail, user.displayName);
+  return { settings: serializeEmailDelivery(delivery) };
+});
+
+app.post('/api/email-delivery', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+  const body = request.body ?? {};
+  const fields = {
+    provider: body.provider || 'smtp',
+    fromEmail: (body.fromEmail || user.email || defaultUserEmail).trim(),
+    fromName: body.fromName || user.displayName || null,
+    digestSubject: body.digestSubject || 'Your Daily Digest',
+    host: body.host || '',
+    port: Number(body.port || 587),
+    secure: !!body.secure,
+    username: body.username || '',
+    password: body.password || undefined,
+    replyTo: body.replyTo || null,
+    enabled: body.enabled == null ? true : !!body.enabled,
+  };
+
+  try {
+    const existing = await prisma.userEmailDelivery.findUnique({ where: { userId: user.id } });
+    const data = existing
+      ? {
+          provider: fields.provider,
+          fromEmail: fields.fromEmail,
+          fromName: fields.fromName,
+          digestSubject: fields.digestSubject,
+          host: fields.host,
+          port: fields.port,
+          secure: fields.secure,
+          username: fields.username,
+          replyTo: fields.replyTo,
+          enabled: fields.enabled,
+          updatedAt: new Date(),
+        }
+      : {
+          userId: user.id,
+          provider: fields.provider,
+          fromEmail: fields.fromEmail,
+          fromName: fields.fromName,
+          digestSubject: fields.digestSubject,
+          host: fields.host,
+          port: fields.port,
+          secure: fields.secure,
+          username: fields.username,
+          password: fields.password || '',
+          replyTo: fields.replyTo,
+          enabled: fields.enabled,
+        };
+
+    if (existing && fields.password) {
+      data.password = fields.password;
+    }
+
+    const updated = existing
+      ? await prisma.userEmailDelivery.update({ where: { userId: user.id }, data })
+      : await prisma.userEmailDelivery.create({ data });
+
+    return { settings: serializeEmailDelivery(updated) };
+  } catch (err) {
+    request.log.error(err, 'Failed to update email delivery settings');
+    return reply.status(500).send({ error: 'Failed to save settings' });
+  }
 });
 
 app.get('/api/email-bookmark/settings', async (request, reply) => {
