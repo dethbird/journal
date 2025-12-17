@@ -3,6 +3,7 @@ import prisma from '../lib/prismaClient.js';
 import { getDigestBuilder } from './registry.js';
 import './sources/github.js';
 import './sources/emailBookmarks.js';
+import './sources/spotify.js';
 
 const DEFAULT_RANGE_HOURS = 24;
 const MAX_GENERIC_ITEMS = 20;

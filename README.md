@@ -18,7 +18,7 @@ A Fastify monolith that collects personal activity events, serves a React SPA, a
 
 - Fastify server in `src/web/server.js`:
   - Hosts the Vite-built React app (`src/ui`).
-  - API endpoints for days and events, plus OAuth callbacks.
+   - API endpoints for days and events, plus OAuth callbacks for GitHub and Spotify.
 - Prisma models include `User`, `ConnectedAccount`, `OAuthToken`, `Event` (with `userId`), `Cursor` (scoped to `connectedAccountId`), and `EmailBookmarkSettings`.
 - Collector runner persists events and cursor state to Postgres and supports per-account collectors.
 - GitHub collector (`src/collector/sources/github.js`) uses stored OAuth tokens per connected account and stamps events with `userId`.
@@ -61,7 +61,13 @@ npm run collector:run   # run collectors once
 - Register a collector with `registerCollector({ source, collect, collectForAccount })` in `src/collector/registry.js`.
   - `collect(cursor)` is the legacy global collector signature.
   - `collectForAccount(account)` is the newer per-account signature; the runner will call it for each active connected account for that source.
-- Existing collectors: `github` and `email_bookmarks` both expose `collectForAccount`.
+- Existing collectors: `github`, `spotify` (recently played), and `email_bookmarks` all expose `collectForAccount`.
+
+## Spotify recently played collector
+
+- Requires the `user-read-recently-played` scope in `SPOTIFY_SCOPES` (already present in `.env.example`).
+- Stores `TrackPlayed` events with track/artist/album/context details and uses a per-account cursor based on the latest `played_at` timestamp.
+- Refreshes access tokens automatically when a refresh token is available. Connect Spotify via the OAuth UI to provision tokens.
 
 ## OAuth and tokens
 
