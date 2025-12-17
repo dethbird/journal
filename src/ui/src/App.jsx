@@ -40,11 +40,9 @@ const HomeView = ({ user, onLogout, onDisconnect }) => (
       </div>
     </div>
 
-    <p className="subtitle is-6 has-text-grey">Monolith server</p>
+    <p className="subtitle is-6 has-text-grey">Evidence Journal</p>
     <h1 className="title is-2">Hello, {user.displayName || 'friend'}</h1>
-    <p className="subtitle is-5">
-      You are logged in. Fastify is serving this React app at <code>/</code>.
-    </p>
+    <p className="subtitle is-5">Welcome to your digest</p>
 
     <div className="box">
       <p className="is-size-5 has-text-weight-semibold">Connected accounts</p>

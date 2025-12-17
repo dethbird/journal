@@ -1,4 +1,4 @@
-# Journal Monolith
+# Evidence Journal
 
 A Fastify API + React UI monolith that collects personal activity events, stores them in Postgres via Prisma, and can produce digest-friendly data while also serving a SPA frontend.
 
