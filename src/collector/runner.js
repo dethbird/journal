@@ -23,6 +23,7 @@ const insertEvent = async (source, item) => {
     occurredAt,
     externalId: item.externalId,
     payload: item.payload ?? {},
+    userId: item.userId,
   };
 
   try {
@@ -49,11 +50,11 @@ export const runCollectorCycle = async () => {
   for (const collector of collectors) {
     const { source } = collector;
 
-    const cursorRecord = await prisma.cursor.upsert({
-      where: { source },
-      create: { source },
-      update: {},
-    });
+    // Find or create the global cursor record for this collector (connectedAccountId = null)
+    let cursorRecord = await prisma.cursor.findFirst({ where: { source, connectedAccountId: null } });
+    if (!cursorRecord) {
+      cursorRecord = await prisma.cursor.create({ data: { source, connectedAccountId: null } });
+    }
 
     const sinceCursor = cursorRecord.cursor ?? null;
     const { items = [], nextCursor = null } = await collector.collect(sinceCursor);
@@ -77,10 +78,7 @@ export const runCollectorCycle = async () => {
     }
 
     if (nextCursor && nextCursor !== cursorRecord.cursor) {
-      await prisma.cursor.update({
-        where: { source },
-        data: { cursor: nextCursor },
-      });
+      await prisma.cursor.update({ where: { id: cursorRecord.id }, data: { cursor: nextCursor } });
     }
 
     results.push({

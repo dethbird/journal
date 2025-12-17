@@ -1,6 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import { registerCollector } from '../registry.js';
-import { resolveGitHubAccessToken } from '../../auth/github.js';
+import prisma from '../../lib/prismaClient.js';
 import { buildGithubEnrichment } from '../enrichers/github.js';
 
 const source = 'github';
@@ -10,11 +10,11 @@ const username = process.env.GITHUB_ACTIVITY_USERNAME;
 // to allow going farther back in history when needed.
 const MAX_PAGES = Number(process.env.GITHUB_MAX_PAGES ?? 6);
 
-const warnMissingConfig = () => {
-  console.warn('GitHub collector missing OAuth access token (lookups expect OAuthToken entries).');
+const warnMissingConfig = (accountId) => {
+  console.warn(`GitHub collector missing OAuth access token for connectedAccount=${accountId}`);
 };
 
-const mapEvent = async (event, octokitClient) => {
+const mapEvent = async (event, octokitClient, userId) => {
   const payload = {
     type: event.type,
     repo: event.repo,
@@ -31,25 +31,30 @@ const mapEvent = async (event, octokitClient) => {
     occurredAt: event.created_at,
     externalId: event.id,
     payload,
+    userId,
     enrichment: enrichment ?? undefined,
   };
 };
-
-const collect = async (cursor) => {
-  const token = await resolveGitHubAccessToken();
+const collectForAccount = async (connectedAccount) => {
+  const token = connectedAccount.oauthTokens?.[0]?.accessToken;
   if (!token) {
-    warnMissingConfig();
-    return { items: [], nextCursor: cursor };
+    warnMissingConfig(connectedAccount.id);
+    return { items: [], nextCursor: null };
   }
 
   const octokit = new Octokit({ auth: token });
-  const items = [];
+  const cursorRecord = await prisma.cursor.upsert({
+    where: { source_connectedAccountId: { source, connectedAccountId: connectedAccount.id } },
+    create: { source, connectedAccountId: connectedAccount.id },
+    update: {},
+  });
+
   let continuePaging = true;
   let page = 1;
   let newestId = null;
   let resolvedUsername = username;
 
-  if (activityMode === 'authenticated_events' && !resolvedUsername) {
+  if (activityMode === 'authenticated_events' || !resolvedUsername) {
     const authUser = await octokit.rest.users.getAuthenticated();
     resolvedUsername = authUser.data.login;
   }
@@ -72,6 +77,9 @@ const collect = async (cursor) => {
     throw new Error(`Unsupported GitHub activity mode: ${activityMode}`);
   };
 
+  const items = [];
+  const sinceCursor = cursorRecord.cursor ?? null;
+
   while (continuePaging && page <= MAX_PAGES) {
     const response = await listPage(page);
     if (response.data.length === 0) {
@@ -83,12 +91,12 @@ const collect = async (cursor) => {
     }
 
     for (const event of response.data) {
-      if (event.id === cursor) {
+      if (event.id === sinceCursor) {
         continuePaging = false;
         break;
       }
 
-      items.push(await mapEvent(event, octokit));
+      items.push(await mapEvent(event, octokit, connectedAccount.userId));
     }
 
     if (!continuePaging || response.data.length < 100) {
@@ -98,7 +106,34 @@ const collect = async (cursor) => {
     page += 1;
   }
 
-  return { items, nextCursor: newestId ?? cursor };
+  if (newestId && newestId !== cursorRecord.cursor) {
+    await prisma.cursor.update({
+      where: { source_connectedAccountId: { source, connectedAccountId: connectedAccount.id } },
+      data: { cursor: newestId },
+    });
+  }
+
+  return { items, nextCursor: newestId ?? sinceCursor };
+};
+
+const collect = async () => {
+  const accounts = await prisma.connectedAccount.findMany({
+    where: { provider: 'github', status: 'active' },
+    include: { oauthTokens: { orderBy: { updatedAt: 'desc' }, take: 1 } },
+  });
+
+  if (accounts.length === 0) {
+    console.warn('No GitHub connected accounts found; skipping collection.');
+    return { items: [], nextCursor: null };
+  }
+
+  const allItems = [];
+  for (const account of accounts) {
+    const { items = [] } = await collectForAccount(account);
+    allItems.push(...items);
+  }
+
+  return { items: allItems, nextCursor: null };
 };
 
 registerCollector({ source, collect });
