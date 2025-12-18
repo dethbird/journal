@@ -1,9 +1,34 @@
 import React, { useEffect, useState } from 'react';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const startOfDay = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const buildWindow = (offsetDays) => {
+  const now = new Date();
+  const todayStart = startOfDay(now);
+  const start = new Date(todayStart.getTime() + offsetDays * DAY_MS);
+  const end = offsetDays === 0 ? now : new Date(start.getTime() + DAY_MS);
+  return { start, end };
+};
+
 const formatTime = (iso) => {
   if (!iso) return '';
   try {
     return new Date(iso).toLocaleString();
+  } catch (e) {
+    return iso;
+  }
+};
+
+const formatDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   } catch (e) {
     return iso;
   }
@@ -173,12 +198,18 @@ const TimelineSection = ({ section }) => {
 
 export default function Digest() {
   const [state, setState] = useState({ loading: true, error: null, vm: null });
+  const [offsetDays, setOffsetDays] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    const { start, end } = buildWindow(offsetDays);
+
     const load = async () => {
       try {
-        const res = await fetch('/api/digest');
+        setState({ loading: true, error: null, vm: null });
+
+        const params = new URLSearchParams({ since: start.toISOString(), until: end.toISOString() });
+        const res = await fetch(`/api/digest?${params.toString()}`, { credentials: 'include' });
         if (!res.ok) {
           throw new Error(`Digest fetch failed (${res.status})`);
         }
@@ -192,7 +223,7 @@ export default function Digest() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [offsetDays]);
 
 
   if (state.loading) {
@@ -212,11 +243,42 @@ export default function Digest() {
   }
 
   const { vm } = state;
+  const windowStart = vm?.window?.start;
+  const windowEnd = vm?.window?.end;
+  const focusedStart = startOfDay(new Date());
+  const displayStart = new Date(focusedStart.getTime() + offsetDays * DAY_MS);
+  const windowLabel = formatDate(displayStart.toISOString());
   return (
     <div>
       <div className="box">
-        <h2 className="title is-4">Digest</h2>
-        <p className="subtitle is-6">Window: {formatTime(vm.window?.start)} → {formatTime(vm.window?.end)}</p>
+        <div className="is-flex is-align-items-center is-justify-content-space-between">
+          <h2 className="title is-4 mb-0">Digest</h2>
+          <div className="is-flex is-align-items-center">
+            <button
+              className="button is-small mr-2"
+              onClick={() => setOffsetDays((d) => d - 1)}
+              disabled={state.loading}
+              title="Previous day"
+            >
+              <span className="icon">
+                <i className="fa-solid fa-chevron-left" />
+              </span>
+              <span className="is-hidden-mobile">Prev</span>
+            </button>
+            <p className="subtitle is-6 mb-0">{windowLabel}</p>
+            <button
+              className="button is-small ml-2"
+              onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
+              disabled={state.loading || offsetDays >= 0}
+              title="Next day"
+            >
+              <span className="is-hidden-mobile">Next</span>
+              <span className="icon">
+                <i className="fa-solid fa-chevron-right" />
+              </span>
+            </button>
+          </div>
+        </div>
         {!vm.sections?.length && <p className="has-text-grey">No events in this window.</p>}
       </div>
 
