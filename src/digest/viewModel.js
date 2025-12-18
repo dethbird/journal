@@ -49,8 +49,23 @@ export const buildDigestViewModel = async ({ since = null, until = null, userId 
     if (section) sections.push(section);
   }
 
+  // Extract weather summary from timeline events for the window
+  let weather = null;
+  if (grouped.has('google_timeline')) {
+    const timelineEvents = grouped.get('google_timeline');
+    // Find most recent weather enrichment in this window
+    for (const evt of timelineEvents.slice().reverse()) {
+      const weatherEnrichment = evt.enrichments?.find(e => e.enrichmentType === 'weather_v1');
+      if (weatherEnrichment?.data?.weather) {
+        weather = weatherEnrichment.data.weather;
+        break;
+      }
+    }
+  }
+
   return {
     window: { start: start.toISOString(), end: end.toISOString() },
+    weather,
     sections,
   };
 };

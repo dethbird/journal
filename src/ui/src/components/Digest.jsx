@@ -304,6 +304,7 @@ export default function Digest() {
   const focusedStart = startOfDay(new Date());
   const displayStart = new Date(focusedStart.getTime() + offsetDays * DAY_MS);
   const windowLabel = formatDate(displayStart.toISOString());
+  const weather = vm?.weather;
   return (
     <div>
       <div className="box">
@@ -334,7 +335,14 @@ export default function Digest() {
               </button>
               {sendState.message ? <span className="has-text-success mr-2">{sendState.message}</span> : null}
               {sendState.error ? <span className="has-text-danger mr-2">{sendState.error}</span> : null}
-            <p className="subtitle is-6 mb-0">{windowLabel}</p>
+            <div className="has-text-centered">
+              <p className="subtitle is-6 mb-0">{windowLabel}</p>
+              {weather ? (
+                <p className="is-size-7 has-text-grey">
+                  {weather.weather_description} · {weather.temperature_c}°C
+                </p>
+              ) : null}
+            </div>
             <button
               className="button is-small ml-2"
               onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}

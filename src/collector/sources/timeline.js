@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { registerCollector } from '../registry.js';
 import prisma from '../../lib/prismaClient.js';
+import buildWeatherEnrichment from '../enrichers/weather.js';
 
 const source = 'google_timeline';
 
@@ -199,6 +200,25 @@ const processSegment = (segment, userId) => {
   // Store canonical string in payload for debugging
   payload.canonical = externalIdData.canonical;
   
+  // Build enrichment for location data (visits and activities have coordinates)
+  let enrichment = null;
+  if (payload.location || payload.startLocation) {
+    const lat = payload.location?.lat ?? payload.startLocation?.lat;
+    const lng = payload.location?.lng ?? payload.startLocation?.lng;
+    if (lat && lng) {
+      // Create a minimal event object for enrichment
+      const eventForEnrichment = {
+        payload: {
+          latitude: lat,
+          longitude: lng,
+          timezone: segment.timeZone ?? 'UTC',
+        },
+        occurredAt: new Date(segment.startTime),
+      };
+      enrichment = await buildWeatherEnrichment(eventForEnrichment);
+    }
+  }
+  
   return {
     source,
     eventType: payload.eventType,
@@ -206,6 +226,7 @@ const processSegment = (segment, userId) => {
     externalId: externalIdData.externalId,
     payload,
     userId,
+    enrichment,
   };
 };
 

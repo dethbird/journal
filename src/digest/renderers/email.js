@@ -129,7 +129,8 @@ const baseStyle = `
   body { font-family: Arial, sans-serif; background: #f7f7f9; color: #1f2933; margin: 0; padding: 24px; }
   .wrapper { max-width: 640px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; }
   h1 { margin: 0 0 8px 0; font-size: 22px; }
-  h2 { margin: 4px 0 16px 0; font-size: 16px; color: #6b7280; }
+  h2 { margin: 4px 0 4px 0; font-size: 16px; color: #6b7280; }
+  .weather-summary { margin: 0 0 16px 0; font-size: 14px; color: #6b7280; }
   h3 { margin: 16px 0 8px 0; font-size: 18px; }
   .cards { display: block; }
   .card { padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 10px; background: #fafafa; }
@@ -164,6 +165,10 @@ export const renderEmailBaseHtml = (vm) => {
     })
     .join('\n');
 
+  const weatherHtml = vm.weather
+    ? `<p class="weather-summary">${escapeHtml(vm.weather.weather_description)} · ${escapeHtml(vm.weather.temperature_c)}°C</p>`
+    : '';
+
   return `<!doctype html>
 <html>
 <head>
@@ -174,6 +179,7 @@ export const renderEmailBaseHtml = (vm) => {
   <div class="wrapper">
     <h1>Daily Digest</h1>
     <h2>${escapeHtml(formatDate(vm.window.start))}</h2>
+    ${weatherHtml}
     ${sections || '<div class="muted">No events in this window.</div>'}
   </div>
 </body>
