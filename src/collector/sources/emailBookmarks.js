@@ -122,9 +122,10 @@ const collectForAccount = async (connectedAccount, cursor) => {
 
   const processedMailboxName = cfg.processedMailbox || 'INBOX/Processed';
 
-  // Fix A: Increased socket timeout (5 min default), disable compression for better streaming
-  const socketTimeoutMs = Number(process.env.EMAIL_BOOKMARK_IMAP_SOCKET_TIMEOUT_MS || 5 * 60 * 1000);
-  const fetchTimeoutMs = Number(process.env.EMAIL_BOOKMARK_FETCH_TIMEOUT_MS || 60000);
+  // Fix A: Use shorter, configurable timeouts to fail fast when appropriate
+  // Defaults: socket timeout 60s, fetch/stream timeout 15s. Override via env vars.
+  const socketTimeoutMs = Number(process.env.EMAIL_BOOKMARK_IMAP_SOCKET_TIMEOUT_MS || 60 * 1000);
+  const fetchTimeoutMs = Number(process.env.EMAIL_BOOKMARK_FETCH_TIMEOUT_MS || 15 * 1000);
 
   const createClient = async () => {
     const client = new ImapFlow({
