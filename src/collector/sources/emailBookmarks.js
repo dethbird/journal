@@ -13,6 +13,15 @@ const withTimeout = (promise, ms, label) => {
 
 const source = 'email_bookmarks';
 
+// Helper to collect a readable stream into a buffer
+const streamToBuffer = async (stream) => {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+};
+
 const extractLinks = (text) => {
   if (!text) return [];
   const links = [];
@@ -113,13 +122,20 @@ const collectForAccount = async (connectedAccount, cursor) => {
 
   const processedMailboxName = cfg.processedMailbox || 'INBOX/Processed';
 
+  // Fix A: Increased socket timeout (5 min default), disable compression for better streaming
+  const socketTimeoutMs = Number(process.env.EMAIL_BOOKMARK_IMAP_SOCKET_TIMEOUT_MS || 5 * 60 * 1000);
+  const fetchTimeoutMs = Number(process.env.EMAIL_BOOKMARK_FETCH_TIMEOUT_MS || 60000);
+
   const createClient = async () => {
     const client = new ImapFlow({
       host: cfg.host,
       port: cfg.port,
       secure: cfg.secure,
       auth: { user: cfg.user, pass: cfg.pass },
-      socketTimeout: Number(process.env.EMAIL_BOOKMARK_IMAP_SOCKET_TIMEOUT_MS || 60000),
+      socketTimeout: socketTimeoutMs,
+      greetingTimeout: 30000,
+      // Disable compression to avoid streaming issues with large messages
+      disableCompression: true,
     });
 
     client.on('error', (err) => {
@@ -135,7 +151,7 @@ const collectForAccount = async (connectedAccount, cursor) => {
   const closeClient = async (client) => {
     if (!client) return;
     try {
-      await withTimeout(client.logout(), Number(process.env.EMAIL_BOOKMARK_IMAP_LOGOUT_TIMEOUT_MS || 2000), 'logout');
+      await withTimeout(client.logout(), Number(process.env.EMAIL_BOOKMARK_IMAP_LOGOUT_TIMEOUT_MS || 5000), 'logout');
     } catch (err) {
       console.warn('imap client logout fallback close:', err?.message ?? err);
       try {
@@ -157,6 +173,8 @@ const collectForAccount = async (connectedAccount, cursor) => {
     const uids = await client.search(searchQuery, { uid: true });
     const sortedUids = [...uids].sort((a, b) => a - b);
 
+    console.info(`[email_bookmarks] Found ${sortedUids.length} message(s) to process`);
+
     for (const uid of sortedUids) {
       let attempts = 0;
       let processed = false;
@@ -164,64 +182,87 @@ const collectForAccount = async (connectedAccount, cursor) => {
       while (!processed && attempts < 2) {
         attempts += 1;
         try {
-          const fetchResult = client.fetch({ uid }, { source: true, envelope: true, internalDate: true });
-          // eslint-disable-next-line no-await-in-loop
-          for await (const msg of fetchResult) {
-            const { subject, from, to, messageId, date, links, snippet } = await parseMessage(msg.source);
-            const occurredAt = msg.internalDate || date || new Date();
-            const payload = {
-              mailbox: cfg.mailbox,
-              uid,
-              messageId,
-              from,
-              to,
-              subject,
-              receivedAt: (date || occurredAt).toISOString(),
-              links,
-              raw: { snippet },
-            };
+          // Fix D: Use download() to stream message content instead of fetch({ source: true })
+          // This avoids the blocking FETCH that was causing timeouts
+          console.info(`[email_bookmarks] Downloading message UID ${uid}...`);
+          
+          // First get envelope metadata (fast, no body)
+          let envelope = null;
+          let internalDate = null;
+          for await (const msg of client.fetch({ uid }, { envelope: true, internalDate: true })) {
+            envelope = msg.envelope;
+            internalDate = msg.internalDate;
+          }
 
-            const externalId = `imap:${cfg.mailbox}:${uid}`;
-            const firstLink = Array.isArray(links) && links.length > 0 ? links[0]?.url || links[0] : null;
+          // Then download the full message using streaming (handles large messages better)
+          const downloadStream = await withTimeout(
+            client.download(String(uid), undefined, { uid: true }),
+            fetchTimeoutMs,
+            `download UID ${uid}`
+          );
+          
+          const rawSource = await withTimeout(
+            streamToBuffer(downloadStream.content),
+            fetchTimeoutMs,
+            `stream UID ${uid}`
+          );
 
-            items.push({
-              eventType: 'BookmarkEvent',
-              occurredAt,
-              externalId,
-              payload,
-              userId: connectedAccount.userId,
-            });
+          const { subject, from, to, messageId, date, links, snippet } = await parseMessage(rawSource);
+          const occurredAt = internalDate || date || new Date();
+          const payload = {
+            mailbox: cfg.mailbox,
+            uid,
+            messageId: messageId || envelope?.messageId,
+            from: from || envelope?.from?.[0]?.address,
+            to: to || envelope?.to?.[0]?.address,
+            subject: subject || envelope?.subject,
+            receivedAt: (date || occurredAt).toISOString(),
+            links,
+            raw: { snippet },
+          };
 
-            if (firstLink) {
-              pendingEnrichments.push({ index: items.length - 1, link: firstLink });
-            }
+          const externalId = `imap:${cfg.mailbox}:${uid}`;
+          const firstLink = Array.isArray(links) && links.length > 0 ? links[0]?.url || links[0] : null;
 
+          items.push({
+            eventType: 'BookmarkEvent',
+            occurredAt,
+            externalId,
+            payload,
+            userId: connectedAccount.userId,
+          });
+
+          if (firstLink) {
+            pendingEnrichments.push({ index: items.length - 1, link: firstLink });
+          }
+
+          // Fix C: Move/mark message immediately after fetching, before any enrichment
+          try {
+            await client.messageMove(uid, processedMailboxName, { uid: true });
+            await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+          } catch (err) {
+            console.warn(`Failed to move message UID ${uid} to ${processedMailboxName}:`, err?.message ?? err);
             try {
-              await client.messageMove(uid, processedMailboxName, { uid: true });
               await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
-            } catch (err) {
-              console.warn(`Failed to move message UID ${uid} to ${processedMailboxName}:`, err?.message ?? err);
-              try {
-                await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
-              } catch (flagErr) {
-                console.warn(`Failed to mark UID ${uid} as seen:`, flagErr?.message ?? flagErr);
-              }
-              if (err?.response?.code === 'NONEXISTENT' || err?.message?.includes('NONEXISTENT')) {
-                await ensureMailboxExists(client, processedMailboxName);
-                try {
-                  await client.messageMove(uid, processedMailboxName, { uid: true });
-                } catch (nestedErr) {
-                  console.warn(`Retry move of UID ${uid} still failed:`, nestedErr?.message ?? nestedErr);
-                }
-              }
+            } catch (flagErr) {
+              console.warn(`Failed to mark UID ${uid} as seen:`, flagErr?.message ?? flagErr);
             }
-
-            if (!maxUid || uid > maxUid) {
-              maxUid = uid;
+            if (err?.response?.code === 'NONEXISTENT' || err?.message?.includes('NONEXISTENT')) {
+              await ensureMailboxExists(client, processedMailboxName);
+              try {
+                await client.messageMove(uid, processedMailboxName, { uid: true });
+              } catch (nestedErr) {
+                console.warn(`Retry move of UID ${uid} still failed:`, nestedErr?.message ?? nestedErr);
+              }
             }
           }
 
+          if (!maxUid || uid > maxUid) {
+            maxUid = uid;
+          }
+
           processed = true;
+          console.info(`[email_bookmarks] Successfully processed UID ${uid}`);
         } catch (err) {
           const message = err?.message ?? String(err);
           console.warn(`Failed to fetch/process UID ${uid} (attempt ${attempts}):`, message);
