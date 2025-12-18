@@ -80,6 +80,45 @@ const renderMusic = (section) => {
   `;
 };
 
+const renderTimeline = (section) => {
+  const summary = section.summary ?? {};
+  const summaryParts = [`${summary.totalVisits ?? 0} visits`, `${summary.totalActivities ?? 0} activities`];
+  if (summary.totalDistance) summaryParts.push(summary.totalDistance);
+  if (summary.totalActivityTime) summaryParts.push(`${summary.totalActivityTime} active`);
+
+  const activityBreakdown = (summary.activityBreakdown ?? [])
+    .map((a) => `${escapeHtml(a.label)} (${a.count})`)
+    .join(', ');
+
+  const visitBreakdown = (summary.visitBreakdown ?? [])
+    .map((v) => `${escapeHtml(v.label)} (${v.count})`)
+    .join(', ');
+
+  const items = (section.items ?? [])
+    .slice(0, 20)
+    .map(
+      (item) => `
+        <div class="card timeline-item">
+          <div class="title">${escapeHtml(item.label || '')}${item.duration ? ` <span class="muted">· ${escapeHtml(item.duration)}</span>` : ''}${item.distance ? ` <span class="muted">· ${escapeHtml(item.distance)}</span>` : ''}</div>
+          ${item.occurredAt ? `<div class="meta">${escapeHtml(new Date(item.occurredAt).toLocaleString())}</div>` : ''}
+          ${item.destinations?.length ? `<div class="meta">${escapeHtml(item.destinations.join(' → '))}</div>` : ''}
+        </div>
+      `
+    )
+    .join('');
+
+  const moreCount = (section.items?.length ?? 0) - 20;
+
+  return `
+    <h3>Timeline</h3>
+    <div class="summary">${escapeHtml(summaryParts.join(' · '))}</div>
+    ${activityBreakdown ? `<div class="meta">Activities: ${activityBreakdown}</div>` : ''}
+    ${visitBreakdown ? `<div class="meta">Places: ${visitBreakdown}</div>` : ''}
+    <div class="cards">${items || '<div class="muted">No timeline events</div>'}</div>
+    ${moreCount > 0 ? `<div class="muted">...and ${moreCount} more</div>` : ''}
+  `;
+};
+
 const baseStyle = `
   body { font-family: Arial, sans-serif; background: #f7f7f9; color: #1f2933; margin: 0; padding: 24px; }
   .wrapper { max-width: 640px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; }
@@ -103,6 +142,7 @@ export const renderEmailBaseHtml = (vm) => {
       if (section.kind === 'github') return renderGithub(section);
       if (section.kind === 'bookmarks') return renderBookmarks(section);
       if (section.kind === 'music') return renderMusic(section);
+      if (section.kind === 'timeline') return renderTimeline(section);
       return '';
     })
     .join('\n');

@@ -2,6 +2,7 @@ import prisma from '../lib/prismaClient.js';
 import buildGithubSection from './sections/github.js';
 import buildBookmarksSection from './sections/bookmarks.js';
 import buildSpotifySection from './sections/spotify.js';
+import buildTimelineSection from './sections/timeline.js';
 
 const DEFAULT_RANGE_HOURS = Number(process.env.DIGEST_RANGE_HOURS ?? 24);
 
@@ -41,6 +42,10 @@ export const buildDigestViewModel = async ({ since = null, until = null, userId 
   }
   if (grouped.has('spotify')) {
     const section = buildSpotifySection(grouped.get('spotify'));
+    if (section) sections.push(section);
+  }
+  if (grouped.has('google_timeline')) {
+    const section = buildTimelineSection(grouped.get('google_timeline'));
     if (section) sections.push(section);
   }
 

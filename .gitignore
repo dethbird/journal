@@ -148,3 +148,6 @@ prisma/dev.db
 prisma/.migration_lock
 prisma/migrations/*/*.sql
 prisma/migrations/*/*.lock
+
+# android location data
+Timeline.json

@@ -118,6 +118,59 @@ const MusicSection = ({ section }) => {
   );
 };
 
+const TimelineSection = ({ section }) => {
+  if (!section) return null;
+  const summary = section.summary ?? {};
+
+  return (
+    <div className="box">
+      <p className="title is-5">Timeline</p>
+      <p className="is-size-6">
+        {summary.totalVisits ?? 0} visits · {summary.totalActivities ?? 0} activities
+        {summary.totalDistance ? ` · ${summary.totalDistance}` : ''}
+        {summary.totalActivityTime ? ` · ${summary.totalActivityTime} active` : ''}
+      </p>
+
+      {summary.activityBreakdown?.length ? (
+        <p className="is-size-7 has-text-grey">
+          Activities: {summary.activityBreakdown.map((a) => `${a.label} (${a.count})`).join(', ')}
+        </p>
+      ) : null}
+
+      {summary.visitBreakdown?.length ? (
+        <p className="is-size-7 has-text-grey">
+          Places: {summary.visitBreakdown.map((v) => `${v.label} (${v.count})`).join(', ')}
+        </p>
+      ) : null}
+
+      <div className="mt-3">
+        {section.items?.length ? (
+          section.items.slice(0, 20).map((item, idx) => (
+            <div key={`timeline-${idx}`} className="mb-2">
+              <p className="has-text-weight-semibold">
+                {item.label}
+                {item.duration ? <span className="has-text-grey"> · {item.duration}</span> : null}
+                {item.distance ? <span className="has-text-grey"> · {item.distance}</span> : null}
+              </p>
+              {item.occurredAt ? (
+                <p className="is-size-7 has-text-grey">{formatTime(item.occurredAt)}</p>
+              ) : null}
+              {item.destinations?.length ? (
+                <p className="is-size-7">{item.destinations.join(' → ')}</p>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <p className="has-text-grey">No timeline events</p>
+        )}
+        {section.items?.length > 20 ? (
+          <p className="is-size-7 has-text-grey">...and {section.items.length - 20} more</p>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 export default function Digest() {
   const [state, setState] = useState({ loading: true, error: null, vm: null });
 
@@ -171,6 +224,7 @@ export default function Digest() {
         if (section.kind === 'github') return <GithubSection key={`s-${idx}`} section={section} />;
         if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} />;
         if (section.kind === 'music') return <MusicSection key={`s-${idx}`} section={section} />;
+        if (section.kind === 'timeline') return <TimelineSection key={`s-${idx}`} section={section} />;
         return null;
       })}
     </div>
