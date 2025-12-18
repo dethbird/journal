@@ -176,6 +176,16 @@ const serializeEmailBookmarkSettings = (settings) => {
   };
 };
 
+const serializeGoogleTimelineSettings = (settings) => {
+  if (!settings) return null;
+  return {
+    driveFileId: settings.driveFileId || null,
+    driveFileName: settings.driveFileName || 'Timeline.json',
+    enabled: settings.enabled,
+    lastSyncedAt: settings.lastSyncedAt,
+  };
+};
+
 const serializeEmailDelivery = (delivery) => {
   if (!delivery) return null;
   return {
@@ -1113,6 +1123,75 @@ app.post('/api/email-bookmark/settings', async (request, reply) => {
   });
 
   return { settings: serializeEmailBookmarkSettings(settings) };
+});
+
+// Return the Google access token for use with Google Picker
+app.get('/api/google/access-token', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const account = await prisma.connectedAccount.findFirst({
+    where: { userId: user.id, provider: 'google' },
+    include: { oauthTokens: { orderBy: { createdAt: 'desc' }, take: 1 } },
+  });
+
+  if (!account || !account.oauthTokens?.[0]?.accessToken) {
+    return reply.status(400).send({ error: 'Google is not connected or no token available' });
+  }
+
+  return { accessToken: account.oauthTokens[0].accessToken };
+});
+
+// Return the Google client ID for use with Google Picker
+app.get('/api/google/client-id', async (request, reply) => {
+  if (!googleConfig.clientId) {
+    return reply.status(503).send({ error: 'Google OAuth not configured' });
+  }
+  return { clientId: googleConfig.clientId };
+});
+
+app.get('/api/google-timeline/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const account = await prisma.connectedAccount.findFirst({
+    where: { userId: user.id, provider: 'google' },
+    include: { googleTimelineSettings: true },
+  });
+
+  if (!account) {
+    return reply.status(400).send({ error: 'Google is not connected' });
+  }
+
+  const settings = serializeGoogleTimelineSettings(account.googleTimelineSettings) || { driveFileId: null, driveFileName: 'Timeline.json' };
+  return { settings };
+});
+
+app.post('/api/google-timeline/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { driveFileId, driveFileName } = request.body || {};
+  if (!driveFileId) {
+    return reply.status(400).send({ error: 'driveFileId is required (use Google Picker to select a file)' });
+  }
+
+  const account = await prisma.connectedAccount.findFirst({
+    where: { userId: user.id, provider: 'google' },
+    include: { googleTimelineSettings: true },
+  });
+
+  if (!account) {
+    return reply.status(400).send({ error: 'Google is not connected' });
+  }
+
+  const settings = await prisma.googleTimelineSettings.upsert({
+    where: { connectedAccountId: account.id },
+    update: { driveFileId, driveFileName: driveFileName || 'Timeline.json' },
+    create: { connectedAccountId: account.id, driveFileId, driveFileName: driveFileName || 'Timeline.json' },
+  });
+
+  return { settings: serializeGoogleTimelineSettings(settings) };
 });
 
 app.get('/health', async () => ({ status: 'ok' }));

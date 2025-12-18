@@ -166,7 +166,8 @@ model EmailBookmarkSettings {
 model GoogleTimelineSettings {
   id                 String   @id @default(cuid())
   connectedAccountId String   @unique
-  driveFilePath      String   @default("Timeline.json")
+  driveFileId        String?
+  driveFileName      String   @default("Timeline.json")
   enabled            Boolean  @default(true)
   lastSyncedAt       DateTime?
   createdAt          DateTime @default(now())

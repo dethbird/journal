@@ -355,8 +355,208 @@ function EmailDeliverySettingsForm() {
   );
 }
 
+function GoogleTimelineSettingsForm({ connected, googleClientId }) {
+  const [state, setState] = useState({
+    loading: true,
+    saving: false,
+    picking: false,
+    driveFileId: null,
+    driveFileName: 'Timeline.json',
+    message: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    const load = async () => {
+      if (!connected) {
+        setState((prev) => ({ ...prev, loading: false, error: 'Connect Google to configure Timeline import.' }));
+        return;
+      }
+      try {
+        const res = await fetch('/api/google-timeline/settings', { credentials: 'include' });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `Failed to load settings (${res.status})`);
+        }
+        const data = await res.json();
+        setState((prev) => ({
+          ...prev,
+          driveFileId: data.settings?.driveFileId || null,
+          driveFileName: data.settings?.driveFileName || 'Timeline.json',
+          loading: false,
+          error: null,
+        }));
+      } catch (e) {
+        setState((prev) => ({ ...prev, loading: false, error: e.message }));
+      }
+    };
+    load();
+  }, [connected]);
+
+  const openPicker = async () => {
+    if (!googleClientId) {
+      setState((prev) => ({ ...prev, error: 'Google client ID not configured' }));
+      return;
+    }
+
+    setState((prev) => ({ ...prev, picking: true, error: null }));
+
+    try {
+      // Get access token from server
+      const tokenRes = await fetch('/api/google/access-token', { credentials: 'include' });
+      if (!tokenRes.ok) {
+        const body = await tokenRes.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to get access token');
+      }
+      const { accessToken } = await tokenRes.json();
+
+      // Load Google Picker API
+      await new Promise((resolve, reject) => {
+        if (window.google?.picker) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.onload = () => {
+          window.gapi.load('picker', { callback: resolve, onerror: reject });
+        };
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+
+      // Create and show picker
+      const view = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(false)
+        .setMimeTypes('application/json');
+
+      const picker = new window.google.picker.PickerBuilder()
+        .setAppId(googleClientId.split('-')[0]) // App ID is before the dash in client ID
+        .setOAuthToken(accessToken)
+        .addView(view)
+        .setCallback((data) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const doc = data.docs[0];
+            setState((prev) => ({
+              ...prev,
+              driveFileId: doc.id,
+              driveFileName: doc.name,
+              picking: false,
+            }));
+          } else if (data.action === window.google.picker.Action.CANCEL) {
+            setState((prev) => ({ ...prev, picking: false }));
+          }
+        })
+        .build();
+
+      picker.setVisible(true);
+    } catch (err) {
+      setState((prev) => ({ ...prev, picking: false, error: err.message }));
+    }
+  };
+
+  const handleSave = async () => {
+    if (!state.driveFileId) {
+      setState((prev) => ({ ...prev, error: 'Please select a file first' }));
+      return;
+    }
+
+    setState((prev) => ({ ...prev, saving: true, message: null, error: null }));
+    try {
+      const res = await fetch('/api/google-timeline/settings', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driveFileId: state.driveFileId, driveFileName: state.driveFileName }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Save failed (${res.status})`);
+      }
+      const data = await res.json();
+      setState((prev) => ({
+        ...prev,
+        saving: false,
+        message: 'Saved',
+        driveFileId: data.settings?.driveFileId || prev.driveFileId,
+        driveFileName: data.settings?.driveFileName || prev.driveFileName,
+      }));
+      setTimeout(() => setState((prev) => ({ ...prev, message: null })), 2500);
+    } catch (err) {
+      setState((prev) => ({ ...prev, saving: false, error: err.message }));
+    }
+  };
+
+  if (state.loading) return <p className="subtitle">Loading Google timeline settings…</p>;
+
+  return (
+    <div className="box mt-4">
+      <p className="is-size-5 has-text-weight-semibold">Google Timeline import</p>
+      {!connected && <p className="help is-danger mt-2">Connect Google to edit these settings.</p>}
+      <div className="mt-3">
+        <div className="field">
+          <label className="label">Timeline file in Google Drive</label>
+          <div className="control">
+            <div className="is-flex is-align-items-center" style={{ gap: '0.5rem' }}>
+              <span className={state.driveFileId ? 'tag is-success is-medium' : 'tag is-warning is-medium'}>
+                {state.driveFileId ? state.driveFileName : 'No file selected'}
+              </span>
+              <button
+                type="button"
+                className={`button is-info${state.picking ? ' is-loading' : ''}`}
+                onClick={openPicker}
+                disabled={!connected || state.picking}
+              >
+                <span className="icon">
+                  <i className="fa-solid fa-folder-open" />
+                </span>
+                <span>Choose from Drive</span>
+              </button>
+            </div>
+            {state.driveFileId && (
+              <p className="help has-text-grey">File ID: {state.driveFileId}</p>
+            )}
+          </div>
+        </div>
+        <div className="field is-grouped mt-4">
+          <div className="control">
+            <button
+              type="button"
+              className={`button is-primary${state.saving ? ' is-loading' : ''}`}
+              onClick={handleSave}
+              disabled={!connected || !state.driveFileId}
+            >
+              Save
+            </button>
+          </div>
+          {state.message && <p className="help is-success">{state.message}</p>}
+          {state.error && <p className="help is-danger">{state.error}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings({ user, onDisconnect }) {
   const connectedAccounts = user?.connectedAccounts || [];
+  const googleConnected = connectedAccounts.some((acc) => acc.provider === 'google');
+  const [googleClientId, setGoogleClientId] = useState(null);
+
+  useEffect(() => {
+    const loadClientId = async () => {
+      try {
+        const res = await fetch('/api/google/client-id', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setGoogleClientId(data.clientId);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    loadClientId();
+  }, []);
 
   return (
     <div>
@@ -382,6 +582,7 @@ export default function Settings({ user, onDisconnect }) {
         </div>
       </div>
 
+      <GoogleTimelineSettingsForm connected={googleConnected} googleClientId={googleClientId} />
       <EmailDeliverySettingsForm />
       <EmailBookmarkSettingsForm />
     </div>
