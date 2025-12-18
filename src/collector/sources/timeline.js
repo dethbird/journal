@@ -1,13 +1,8 @@
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import { registerCollector } from '../registry.js';
 import prisma from '../../lib/prismaClient.js';
 
 const source = 'google_timeline';
-
-// Default path to Timeline.json (relative to project root)
-const TIMELINE_FILE = process.env.TIMELINE_JSON_PATH || path.resolve(process.cwd(), 'Timeline.json');
 
 /**
  * Parse lat/lng from Google Timeline format: "39.1085173°, -84.515728°"
@@ -215,12 +210,24 @@ const processSegment = (segment, userId) => {
 };
 
 /**
- * Stream and parse Timeline.json, yielding segments
+ * Fetch file content from Google Drive using access token
  */
-const streamTimelineSegments = async function* (filePath) {
-  const content = await fs.promises.readFile(filePath, 'utf-8');
-  const data = JSON.parse(content);
-  
+const fetchDriveFile = async (fileId, accessToken) => {
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Drive API error (${res.status}): ${text}`);
+  }
+  return res.json();
+};
+
+/**
+ * Parse Timeline.json content and yield segments
+ */
+const parseTimelineSegments = function* (data) {
   const segments = data.semanticSegments || [];
   for (const segment of segments) {
     yield segment;
@@ -228,64 +235,74 @@ const streamTimelineSegments = async function* (filePath) {
 };
 
 /**
- * Main collector function
+ * Per-account collector function - fetches Timeline.json from Google Drive for a specific user
  */
-const collect = async (cursor) => {
-  if (!fs.existsSync(TIMELINE_FILE)) {
-    console.warn(`[timeline] Timeline.json not found at ${TIMELINE_FILE}, skipping collection`);
-    return { items: [], nextCursor: null };
+const collectForAccount = async (account, cursor) => {
+  const userId = account.userId;
+  const settings = account.googleTimelineSettings;
+  const token = account.oauthTokens?.[0];
+
+  if (!token?.accessToken) {
+    console.warn(`[timeline] No access token for user ${userId}, skipping`);
+    return { items: [], nextCursor: cursor };
   }
-  
-  // Get or create a default user (for timeline import, we use user ID 1 or create one)
-  let user = await prisma.user.findFirst();
-  if (!user) {
-    user = await prisma.user.create({ data: { name: 'Default User' } });
+
+  if (!settings?.driveFileId) {
+    console.warn(`[timeline] No driveFileId configured for user ${userId}, skipping`);
+    return { items: [], nextCursor: cursor };
   }
-  const userId = user.id;
-  
-  console.info(`[timeline] Starting import from ${TIMELINE_FILE}`);
-  
+
+  console.info(`[timeline] Fetching Timeline.json (${settings.driveFileName || settings.driveFileId}) for user ${userId}`);
+
   const items = [];
-  let processed = 0;
-  let skipped = 0;
-  
-  // Parse the last processed timestamp from cursor
-  const lastProcessedTime = cursor ? new Date(cursor) : null;
-  let maxTime = lastProcessedTime;
-  
-  for await (const segment of streamTimelineSegments(TIMELINE_FILE)) {
-    const segmentTime = new Date(segment.startTime);
-    
-    // Skip if we've already processed this (based on cursor timestamp)
-    // Note: This is a simple approach; for full de-dupe, rely on externalId unique constraint
-    if (lastProcessedTime && segmentTime <= lastProcessedTime) {
-      skipped++;
-      continue;
-    }
-    
-    const item = processSegment(segment, userId);
-    if (item) {
-      items.push(item);
-      processed++;
-      
-      // Track max time for cursor
-      if (!maxTime || segmentTime > maxTime) {
-        maxTime = segmentTime;
+  let maxTime = cursor ? new Date(cursor) : null;
+
+  try {
+    const data = await fetchDriveFile(settings.driveFileId, token.accessToken);
+
+    let processed = 0;
+    let skipped = 0;
+    const lastProcessedTime = cursor ? new Date(cursor) : null;
+
+    for (const segment of parseTimelineSegments(data)) {
+      const segmentTime = new Date(segment.startTime);
+
+      // Skip if we've already processed this
+      if (lastProcessedTime && segmentTime <= lastProcessedTime) {
+        skipped++;
+        continue;
       }
-    } else {
-      skipped++;
+
+      const item = processSegment(segment, userId);
+      if (item) {
+        items.push(item);
+        processed++;
+
+        if (!maxTime || segmentTime > maxTime) {
+          maxTime = segmentTime;
+        }
+      } else {
+        skipped++;
+      }
     }
+
+    console.info(`[timeline] User ${userId}: processed ${processed} events, skipped ${skipped} segments`);
+
+    // Update lastSyncedAt
+    await prisma.googleTimelineSettings.update({
+      where: { connectedAccountId: account.id },
+      data: { lastSyncedAt: new Date() },
+    });
+  } catch (err) {
+    console.error(`[timeline] Error fetching Timeline for user ${userId}:`, err.message);
   }
-  
-  console.info(`[timeline] Processed ${processed} events, skipped ${skipped} segments`);
-  
-  // Return items and the next cursor (latest timestamp)
+
   return {
     items,
     nextCursor: maxTime ? maxTime.toISOString() : cursor,
   };
 };
 
-registerCollector({ source, collect });
+registerCollector({ source, collectForAccount });
 
-export default collect;
+export default collectForAccount;

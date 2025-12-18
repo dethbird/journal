@@ -52,12 +52,21 @@ export const runCollectorCycle = async () => {
 
     // If the collector exposes a per-account collector, call that for each connected account.
     if (typeof collectForAccount === 'function') {
-      const accounts = await prisma.connectedAccount.findMany({ where: { provider: source, status: 'active' }, include: { oauthTokens: true, emailBookmarkSettings: true } });
+      // Special case: google_timeline uses google provider accounts with timeline settings
+      const accountQuery = source === 'google_timeline'
+        ? { provider: 'google', status: 'active', googleTimelineSettings: { driveFileId: { not: null } } }
+        : { provider: source, status: 'active' };
+      const accounts = await prisma.connectedAccount.findMany({ where: accountQuery, include: { oauthTokens: true, emailBookmarkSettings: true, googleTimelineSettings: true } });
 
       let totalStored = 0;
 
       for (const account of accounts) {
-        const { items = [], nextCursor = null } = await collectForAccount(account);
+        // Get or create cursor for this account
+        const cursorRecord = await prisma.cursor.findFirst({ where: { source, connectedAccountId: account.id } })
+          || await prisma.cursor.create({ data: { source, connectedAccountId: account.id } });
+        const sinceCursor = cursorRecord.cursor ?? null;
+
+        const { items = [], nextCursor = null } = await collectForAccount(account, sinceCursor);
 
         for (const item of items) {
           const createdEvent = await insertEvent(source, item);
@@ -72,6 +81,11 @@ export const runCollectorCycle = async () => {
               });
             }
           }
+        }
+
+        // Update cursor for this account
+        if (nextCursor && nextCursor !== cursorRecord.cursor) {
+          await prisma.cursor.update({ where: { id: cursorRecord.id }, data: { cursor: nextCursor } });
         }
       }
 
