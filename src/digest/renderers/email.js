@@ -154,6 +154,12 @@ const formatDate = (iso) => {
   }
 };
 
+const cToF = (c) => {
+  const n = Number(c);
+  if (!Number.isFinite(n)) return '';
+  return Math.round(((n * 9) / 5 + 32) * 10) / 10;
+};
+
 export const renderEmailBaseHtml = (vm) => {
   const sections = vm.sections
     .map((section) => {
@@ -166,7 +172,7 @@ export const renderEmailBaseHtml = (vm) => {
     .join('\n');
 
   const weatherHtml = vm.weather
-    ? `<p class="weather-summary">${escapeHtml(vm.weather.weather_description)} · ${escapeHtml(String(vm.weather.temperature_c ?? ''))}°C</p>`
+    ? `<p class="weather-summary">${escapeHtml(vm.weather.weather_description)} · ${escapeHtml(String(vm.weather.temperature_c ?? ''))}°C (${escapeHtml(String(cToF(vm.weather.temperature_c)))}°F)</p>`
     : '';
 
   return `<!doctype html>

@@ -34,6 +34,12 @@ const formatDate = (iso) => {
   }
 };
 
+const cToF = (c) => {
+  const n = Number(c);
+  if (!Number.isFinite(n)) return '';
+  return Math.round(((n * 9) / 5 + 32) * 10) / 10;
+};
+
 const GithubSection = ({ section }) => {
   if (!section) return null;
   return (
@@ -339,7 +345,7 @@ export default function Digest() {
               <p className="subtitle is-6 mb-0">{windowLabel}</p>
               {weather ? (
                 <p className="is-size-7 has-text-grey">
-                  {weather.weather_description} · {weather.temperature_c}°C
+                  {weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)
                 </p>
               ) : null}
             </div>

@@ -53,9 +53,12 @@ const formatDuration = (minutes) => {
  * Format distance in a human-readable way
  */
 const formatDistance = (meters) => {
-  if (!meters) return null;
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(1)}km`;
+  if (!meters && meters !== 0) return null;
+  const km = Number(meters) / 1000;
+  const mi = km * 0.621371;
+  const kmLabel = km >= 10 ? Math.round(km) : km.toFixed(1);
+  const miLabel = mi >= 10 ? Math.round(mi) : mi.toFixed(1);
+  return `${kmLabel}km (${miLabel}mi)`;
 };
 
 /**
