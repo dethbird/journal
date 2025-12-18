@@ -43,12 +43,24 @@ const GithubSection = ({ section }) => {
         section.pushes.map((push) => (
           <div key={`${push.repo}-${push.branch || 'main'}`} className="mb-3">
             <p className="has-text-weight-semibold">
-              {push.repo} {push.branch ? <span className="has-text-grey">({push.branch})</span> : null}
+              {push.repoUrl ? (
+                <a href={push.repoUrl} target="_blank" rel="noreferrer">
+                  {push.repo}
+                </a>
+              ) : (
+                push.repo
+              )}{' '}
+              {push.branch ? <span className="has-text-grey">({push.branch})</span> : null}
             </p>
             <p className="is-size-7 has-text-grey">{push.commits} commit{push.commits === 1 ? '' : 's'}</p>
             {push.details?.map((detail, idx) => (
               <p key={idx} className="is-size-7">
-                {detail.short ? <span className="has-text-grey">({detail.short}) </span> : null}
+                {detail.url ? (
+                  <a className="has-text-grey" href={detail.url} target="_blank" rel="noreferrer">{detail.short || detail.message}</a>
+                ) : (
+                  detail.short ? <span className="has-text-grey">({detail.short}) </span> : null
+                )}
+                {detail.short ? ' ' : null}
                 {detail.message}
               </p>
             ))}
@@ -84,14 +96,23 @@ const BookmarkSection = ({ section }) => {
       <p className="title is-5">Bookmarks ({section.count ?? 0})</p>
       {section.items?.length ? (
         section.items.map((item) => (
-          <div key={item.url} className="mb-3">
-            <a href={item.url} target="_blank" rel="noreferrer" className="has-text-weight-semibold">
-              {item.title}
-            </a>
-            {item.excerpt ? <p className="is-size-7 mt-1">{item.excerpt}</p> : null}
-            {item.occurredAt ? (
-              <p className="is-size-7 has-text-grey mt-1">Saved {formatTime(item.occurredAt)}</p>
+          <div key={item.url} className="mb-3 is-flex">
+            {item.imageUrl ? (
+              <div className="mr-3">
+                <a href={item.url} target="_blank" rel="noreferrer">
+                  <img src={item.imageUrl} alt="" style={{ width: 96, height: 'auto', borderRadius: 6 }} />
+                </a>
+              </div>
             ) : null}
+            <div>
+              <a href={item.url} target="_blank" rel="noreferrer" className="has-text-weight-semibold">
+                {item.title}
+              </a>
+              {item.excerpt ? <p className="is-size-7 mt-1">{item.excerpt}</p> : null}
+              {item.occurredAt ? (
+                <p className="is-size-7 has-text-grey mt-1">Saved {formatTime(item.occurredAt)}</p>
+              ) : null}
+            </div>
           </div>
         ))
       ) : (
@@ -125,14 +146,27 @@ const MusicSection = ({ section }) => {
       <div className="mt-3">
         {section.plays?.length ? (
           section.plays.map((play, idx) => (
-            <div key={`${play.trackName}-${idx}`} className="mb-2">
-              <p className="has-text-weight-semibold">
-                {play.trackName}
-                {play.artists?.length ? <span className="has-text-grey"> — {play.artists.join(', ')}</span> : null}
-              </p>
-              {play.playedAt ? (
-                <p className="is-size-7 has-text-grey">Played {formatTime(play.playedAt)}</p>
+            <div key={`${play.trackName}-${idx}`} className="mb-2 is-flex is-align-items-center">
+              {play.albumImage ? (
+                <div className="mr-3">
+                  {play.url ? (
+                    <a href={play.url} target="_blank" rel="noreferrer">
+                      <img src={play.albumImage} alt="" style={{ width: 64, height: 'auto', borderRadius: 6 }} />
+                    </a>
+                  ) : (
+                    <img src={play.albumImage} alt="" style={{ width: 64, height: 'auto', borderRadius: 6 }} />
+                  )}
+                </div>
               ) : null}
+              <div>
+                <p className="has-text-weight-semibold">
+                  {play.trackName}
+                  {play.artists?.length ? <span className="has-text-grey"> — {play.artists.join(', ')}</span> : null}
+                </p>
+                {play.playedAt ? (
+                  <p className="is-size-7 has-text-grey">Played {formatTime(play.playedAt)}</p>
+                ) : null}
+              </div>
             </div>
           ))
         ) : (

@@ -56,6 +56,7 @@ export const buildSpotifySection = (events) => {
       trackName: track.name ?? 'Unknown track',
       artists: artists.map((a) => a.name).filter(Boolean),
       album: payload.album?.name ?? null,
+      albumImage: payload.album?.imageUrl ?? null,
       playedAt: occurredAt ? occurredAt.toISOString() : null,
       url: track.externalUrl ?? track.external_urls?.spotify ?? null,
     });

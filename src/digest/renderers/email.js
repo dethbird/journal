@@ -12,10 +12,14 @@ const renderGithub = (section) => {
   const pushes = (section.pushes ?? [])
     .map((p) => {
       const branch = p.branch ? ` <span class="muted">(${escapeHtml(p.branch)})</span>` : '';
+      const repoTitle = p.repoUrl ? `<a href="${escapeHtml(p.repoUrl)}">${escapeHtml(p.repo)}</a>` : escapeHtml(p.repo);
       const details = (p.details ?? [])
-        .map((d) => `<div class="detail">${d.short ? `<strong>(${escapeHtml(d.short)})</strong> ` : ''}${escapeHtml(d.message ?? '')}</div>`)
+        .map((d) => {
+          const short = d.url ? `<a href="${escapeHtml(d.url)}">${escapeHtml(d.short || '')}</a>` : (d.short ? `<strong>(${escapeHtml(d.short)})</strong>` : '');
+          return `<div class="detail">${short ? `${short} ` : ''}${escapeHtml(d.message ?? '')}</div>`;
+        })
         .join('');
-      return `<div class="card"><div class="title">${escapeHtml(p.repo)}${branch}</div><div class="meta">${p.commits} commit${p.commits === 1 ? '' : 's'}</div>${details}</div>`;
+      return `<div class="card"><div class="title">${repoTitle}${branch}</div><div class="meta">${p.commits} commit${p.commits === 1 ? '' : 's'}</div>${details}</div>`;
     })
     .join('');
 
@@ -39,6 +43,7 @@ const renderBookmarks = (section) => {
     .map(
       (item) => `
         <div class="card bookmark">
+          ${item.imageUrl ? `<div class="thumb"><img src="${escapeHtml(item.imageUrl)}" alt=""/></div>` : ''}
           <div class="title"><a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a></div>
           ${item.excerpt ? `<div class="excerpt">${escapeHtml(item.excerpt)}</div>` : ''}
         </div>
@@ -61,6 +66,7 @@ const renderMusic = (section) => {
     .map(
       (play) => `
         <div class="card play">
+          ${play.albumImage ? `<div class="thumb"><img src="${escapeHtml(play.albumImage)}" alt=""/></div>` : ''}
           <div class="title">${escapeHtml(play.trackName)}${play.artists?.length ? ` <span class="muted">by ${escapeHtml(play.artists.join(', '))}</span>` : ''}</div>
           ${play.playedAt ? `<div class="meta">${escapeHtml(play.playedAt)}</div>` : ''}
         </div>
@@ -130,6 +136,8 @@ const baseStyle = `
   .title { font-weight: 600; margin-bottom: 4px; }
   .meta { color: #6b7280; font-size: 12px; margin-bottom: 4px; }
   .summary { margin: 8px 0; font-weight: 600; }
+  .thumb { float: left; margin-right: 12px; }
+  .thumb img { width: 72px; height: auto; border-radius: 4px; }
   .muted { color: #6b7280; }
   .excerpt { color: #374151; font-size: 14px; margin-top: 4px; }
   a { color: #2563eb; text-decoration: none; }

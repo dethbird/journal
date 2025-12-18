@@ -46,7 +46,11 @@ export const buildGithubSection = (events) => {
       : [];
     const commitDetails = Array.isArray(enrichment?.commits)
       ? enrichment.commits
-          .map((c) => ({ short: c.short_sha ?? (c.sha ? c.sha.slice(0, 7) : null), message: c.message ?? null }))
+          .map((c) => ({
+            short: c.short_sha ?? (c.sha ? c.sha.slice(0, 7) : null),
+            message: c.message ?? null,
+            url: c.url ?? c.html_url ?? null,
+          }))
           .filter((c) => c.message)
       : [];
 
@@ -76,22 +80,25 @@ export const buildGithubSection = (events) => {
   if (groups.size > 0) {
     const sorted = [...groups.values()].sort((a, b) => b.commits - a.commits || a.repo.localeCompare(b.repo));
     const top = sorted.slice(0, MAX_REPOS_DISPLAY);
-    for (const group of top) {
+      for (const group of top) {
       stats.commits += group.commits;
       if (group.repo) {
         stats.repos.add(group.repo);
       }
 
       const commitDetails = [...group.commitDetails.values()].slice(0, MAX_COMMIT_LINES);
-      const details = commitDetails.length
-        ? commitDetails.map((detail) => ({ short: detail.short, message: detail.message }))
-        : group.subjects.map((subject) => ({ short: null, message: subject }));
+        const commitList = commitDetails.length
+          ? commitDetails.map((detail) => ({ short: detail.short, message: detail.message, url: detail.url }))
+          : group.subjects.map((subject) => ({ short: null, message: subject, url: null }));
+        // derive a repo URL when we can (repo is owner/name)
+        const repoUrl = group.repo && group.repo.includes('/') ? `https://github.com/${group.repo}` : null;
 
       pushList.push({
         repo: group.repo,
         branch: group.branch,
         commits: group.commits,
-        details,
+          details: commitList,
+          repoUrl,
       });
     }
   }
