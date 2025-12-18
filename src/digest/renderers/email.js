@@ -166,7 +166,7 @@ export const renderEmailBaseHtml = (vm) => {
     .join('\n');
 
   const weatherHtml = vm.weather
-    ? `<p class="weather-summary">${escapeHtml(vm.weather.weather_description)} · ${escapeHtml(vm.weather.temperature_c)}°C</p>`
+    ? `<p class="weather-summary">${escapeHtml(vm.weather.weather_description)} · ${escapeHtml(String(vm.weather.temperature_c ?? ''))}°C</p>`
     : '';
 
   return `<!doctype html>

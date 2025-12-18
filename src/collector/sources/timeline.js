@@ -175,7 +175,7 @@ const getDurationMinutes = (start, end) => {
 /**
  * Determine segment type and process accordingly
  */
-const processSegment = (segment, userId) => {
+const processSegment = async (segment, userId) => {
   // Skip timelinePath segments (noisy GPS data)
   if (segment.timelinePath && !segment.visit && !segment.activity && !segment.timelineMemory) {
     return null;
@@ -294,7 +294,7 @@ const collectForAccount = async (account, cursor) => {
         continue;
       }
 
-      const item = processSegment(segment, userId);
+      const item = await processSegment(segment, userId);
       if (item) {
         items.push(item);
         processed++;
