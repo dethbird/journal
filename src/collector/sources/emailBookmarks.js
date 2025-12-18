@@ -93,7 +93,7 @@ const collectForAccount = async (connectedAccount, cursor) => {
     processedMailbox: settings.processedMailbox,
   };
 
-  const processedMailboxName = cfg.processedMailbox.replace(/\//g, '.');
+  const processedMailboxName = cfg.processedMailbox || 'INBOX/Processed';
 
   const createClient = async () => {
     const client = new ImapFlow({
@@ -190,8 +190,22 @@ const collectForAccount = async (connectedAccount, cursor) => {
 
             try {
               await client.messageMove(uid, processedMailboxName, { uid: true });
+              await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
             } catch (err) {
               console.warn(`Failed to move message UID ${uid} to ${processedMailboxName}:`, err?.message ?? err);
+              try {
+                await client.messageFlagsAdd(uid, ['\\Seen'], { uid: true });
+              } catch (flagErr) {
+                console.warn(`Failed to mark UID ${uid} as seen:`, flagErr?.message ?? flagErr);
+              }
+              if (err?.response?.code === 'NONEXISTENT' || err?.message?.includes('NONEXISTENT')) {
+                await ensureMailboxExists(client, processedMailboxName);
+                try {
+                  await client.messageMove(uid, processedMailboxName, { uid: true });
+                } catch (nestedErr) {
+                  console.warn(`Retry move of UID ${uid} still failed:`, nestedErr?.message ?? nestedErr);
+                }
+              }
             }
 
             if (!maxUid || uid > maxUid) {
