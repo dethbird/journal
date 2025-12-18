@@ -74,3 +74,10 @@ ul {
   gap: 0.5rem;
 }
 
+/* Keep app content aligned to the top to avoid vertical shifting */
+.hero.is-fullheight .hero-body {
+  align-items: flex-start;
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
