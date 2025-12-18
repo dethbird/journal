@@ -878,6 +878,15 @@ app.post('/api/digest/send', async (request, reply) => {
   if (!user) {
     return reply.status(401).send({ error: 'Not authenticated' });
   }
+  let since;
+  let until;
+  try {
+    since = parseDateParam(request.body?.since ?? request.query?.since);
+    until = parseDateParam(request.body?.until ?? request.query?.until);
+  } catch (err) {
+    request.log.warn(err, 'Invalid digest date range for send');
+    return reply.status(400).send({ error: err.message });
+  }
 
   const hours = Number(request.body?.hours ?? request.query?.hours ?? 24);
   try {
@@ -890,7 +899,8 @@ app.post('/api/digest/send', async (request, reply) => {
       return reply.status(400).send({ error: 'Email delivery is disabled' });
     }
 
-    const vm = await buildDigestViewModel({ userId: user.id, rangeHours: hours });
+    // If since/until provided, build digest for that exact window; otherwise fall back to hours
+    const vm = await buildDigestViewModel({ userId: user.id, since: since ?? null, until: until ?? null, rangeHours: since || until ? undefined : hours });
     // attach recipient info for renderer (use user's email if available)
     vm.userEmail = user.email || delivery.fromEmail;
 

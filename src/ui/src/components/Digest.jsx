@@ -233,6 +233,7 @@ const TimelineSection = ({ section }) => {
 export default function Digest() {
   const [state, setState] = useState({ loading: true, error: null, vm: null });
   const [offsetDays, setOffsetDays] = useState(0);
+  const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -258,6 +259,27 @@ export default function Digest() {
       cancelled = true;
     };
   }, [offsetDays]);
+
+  const handleSend = async () => {
+    const { start, end } = buildWindow(offsetDays);
+    setSendState({ sending: true, message: null, error: null });
+    try {
+      const res = await fetch(`/api/digest/send`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ since: start.toISOString(), until: end.toISOString() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Send failed (${res.status})`);
+      }
+      setSendState({ sending: false, message: 'Sent!', error: null });
+      setTimeout(() => setSendState((s) => ({ ...s, message: null })), 2500);
+    } catch (err) {
+      setSendState({ sending: false, message: null, error: err.message });
+    }
+  };
 
 
   if (state.loading) {
@@ -299,6 +321,19 @@ export default function Digest() {
               </span>
               <span className="is-hidden-mobile">Prev</span>
             </button>
+              <button
+                className={`button is-small is-info mr-2${sendState.sending ? ' is-loading' : ''}`}
+                onClick={handleSend}
+                disabled={sendState.sending}
+                title="Send digest for this window"
+              >
+                <span className="icon">
+                  <i className="fa-solid fa-envelope" />
+                </span>
+                <span className="is-hidden-mobile">Send</span>
+              </button>
+              {sendState.message ? <span className="has-text-success mr-2">{sendState.message}</span> : null}
+              {sendState.error ? <span className="has-text-danger mr-2">{sendState.error}</span> : null}
             <p className="subtitle is-6 mb-0">{windowLabel}</p>
             <button
               className="button is-small ml-2"

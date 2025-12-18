@@ -144,6 +144,15 @@ const baseStyle = `
   a:hover { text-decoration: underline; }
 `;
 
+const formatDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  } catch (e) {
+    return iso;
+  }
+};
+
 export const renderEmailBaseHtml = (vm) => {
   const sections = vm.sections
     .map((section) => {
@@ -164,7 +173,7 @@ export const renderEmailBaseHtml = (vm) => {
 <body>
   <div class="wrapper">
     <h1>Daily Digest</h1>
-    <h2>${escapeHtml(vm.window.start)} → ${escapeHtml(vm.window.end)}</h2>
+    <h2>${escapeHtml(formatDate(vm.window.start))}</h2>
     ${sections || '<div class="muted">No events in this window.</div>'}
   </div>
 </body>
