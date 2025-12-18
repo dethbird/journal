@@ -40,6 +40,13 @@ const githubConfig = {
   scopes: (process.env.GITHUB_SCOPES || 'read:user user:email').split(/\s+/).filter(Boolean),
 };
 
+const googleConfig = {
+  clientId: process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackUrl: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3000/api/oauth/google/callback',
+  scopes: (process.env.GOOGLE_SCOPES || 'openid email profile https://www.googleapis.com/auth/drive.readonly').split(/\s+/).filter(Boolean),
+};
+
 const getSessionKey = () => {
   const s = process.env.SESSION_SECRET;
   if (!s) return crypto.randomBytes(32);
@@ -344,6 +351,16 @@ const fetchGithubProfile = async (accessToken) => {
   }
 
   return profile;
+};
+
+const fetchGoogleProfile = async (accessToken) => {
+  const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Google profile fetch failed (${res.status})`);
+  }
+  return res.json();
 };
 
 app.register(fastifyStatic, {
@@ -682,6 +699,139 @@ app.get('/api/oauth/github/callback', async (request, reply) => {
     return reply.redirect('/');
   } catch (err) {
     request.log.error(err, 'GitHub OAuth callback failed');
+    return reply.status(500).send({ error: err?.message ?? String(err) });
+  }
+});
+
+app.get('/api/oauth/google/start', async (request, reply) => {
+  if (!googleConfig.clientId || !googleConfig.clientSecret) {
+    return reply.status(503).send({ error: 'Google OAuth not configured' });
+  }
+
+  const state = crypto.randomBytes(16).toString('hex');
+  const codeVerifier = base64url(crypto.randomBytes(32));
+  const codeChallenge = base64url(sha256(codeVerifier));
+
+  try {
+    await request.session.set(`google_pkce:${state}`, codeVerifier);
+  } catch (e) {
+    request.log.warn(e, 'Failed to store Google PKCE verifier in session');
+  }
+
+  const params = new URLSearchParams({
+    client_id: googleConfig.clientId,
+    response_type: 'code',
+    redirect_uri: googleConfig.callbackUrl,
+    scope: googleConfig.scopes.join(' '),
+    state,
+    code_challenge_method: 'S256',
+    code_challenge: codeChallenge,
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+  });
+
+  const authorizeUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  return reply.redirect(authorizeUrl);
+});
+
+app.get('/api/oauth/google/callback', async (request, reply) => {
+  if (!googleConfig.clientId || !googleConfig.clientSecret) {
+    return reply.status(503).send({ error: 'Google OAuth not configured' });
+  }
+
+  const { code, state, error } = request.query;
+  if (error) {
+    return reply.status(400).send({ error, state });
+  }
+
+  if (!code || !state) {
+    return reply.status(400).send({ error: 'Missing code or state' });
+  }
+
+  const key = `google_pkce:${state}`;
+  let codeVerifier;
+  try {
+    codeVerifier = request.session.get(key);
+    try { request.session.delete(key); } catch (e) { /* ignore */ }
+  } catch (e) {
+    request.log.warn(e, 'Failed to retrieve Google PKCE verifier from session');
+  }
+
+  if (!codeVerifier) {
+    return reply.status(400).send({ error: 'PKCE code_verifier missing or expired' });
+  }
+
+  try {
+    const params = new URLSearchParams();
+    params.set('grant_type', 'authorization_code');
+    params.set('code', code);
+    params.set('redirect_uri', googleConfig.callbackUrl);
+    params.set('client_id', googleConfig.clientId);
+    params.set('client_secret', googleConfig.clientSecret);
+    params.set('code_verifier', codeVerifier);
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    if (!tokenRes.ok) {
+      const body = await tokenRes.text();
+      request.log.error({ status: tokenRes.status, body }, 'Google token exchange failed');
+      return reply.status(502).send({ error: 'Token exchange failed' });
+    }
+
+    const token = await tokenRes.json();
+    if (!token?.access_token) {
+      return reply.status(400).send({ error: 'Missing access token from Google' });
+    }
+
+    const profile = await fetchGoogleProfile(token.access_token);
+    const derivedDisplayName = profile.name?.trim() || profile.email || defaultUserEmail || 'Google User';
+    const providerAccountId = String(profile.id || profile.email || derivedDisplayName);
+    const user = await findOrCreateUserFromConnectedAccount({
+      email: profile.email ?? null,
+      displayName: derivedDisplayName,
+    });
+
+    // Check if we already have a connected account with a refresh token
+    const existingAccount = await prisma.connectedAccount.findFirst({
+      where: { userId: user.id, provider: 'google' },
+      include: { oauthTokens: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+
+    const connected = await upsertConnectedAccount(
+      user.id,
+      'google',
+      providerAccountId,
+      derivedDisplayName,
+      token.scope || googleConfig.scopes.join(' ')
+    );
+
+    // Don't overwrite existing refresh token with null
+    const tokenToStore = { ...token };
+    if (!tokenToStore.refresh_token && existingAccount?.oauthTokens?.[0]?.refreshToken) {
+      tokenToStore.refresh_token = existingAccount.oauthTokens[0].refreshToken;
+    }
+
+    await storeOAuthToken(connected.id, tokenToStore);
+
+    const signed = signSession(user.id);
+    reply.setCookie('journal_auth', signed, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
+    app.log.info({ userId: user.id, cookieSet: reply.getHeader('set-cookie') }, 'Set journal_auth cookie after Google OAuth');
+
+    return reply.redirect('/');
+  } catch (err) {
+    request.log.error(err, 'Google OAuth callback failed');
     return reply.status(500).send({ error: err?.message ?? String(err) });
   }
 });

@@ -15,6 +15,12 @@ const LoginView = () => (
       </span>
       <span>Login with GitHub</span>
     </a>
+    <a className="button is-primary ml-2" href="/api/oauth/google/start">
+      <span className="icon">
+        <i className="fa-brands fa-google" />
+      </span>
+      <span>Login with Google</span>
+    </a>
   </div>
 );
 

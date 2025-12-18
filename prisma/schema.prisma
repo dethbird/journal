@@ -116,6 +116,7 @@ model ConnectedAccount {
   oauthTokens        OAuthToken[]
   cursors            Cursor[]
   emailBookmarkSettings EmailBookmarkSettings?
+  googleTimelineSettings GoogleTimelineSettings?
 
   @@unique([userId, provider, providerAccountId])
   @@index([userId, provider])
@@ -156,6 +157,18 @@ model EmailBookmarkSettings {
   processedMailbox   String   @default("INBOX/Processed")
   username           String
   password           String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+}
+
+model GoogleTimelineSettings {
+  id                 String   @id @default(cuid())
+  connectedAccountId String   @unique
+  driveFilePath      String   @default("Timeline.json")
+  enabled            Boolean  @default(true)
+  lastSyncedAt       DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

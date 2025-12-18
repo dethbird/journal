@@ -18,7 +18,18 @@ function ConnectedAccountRow({ provider, connected, onDisconnect }) {
           <div>
             <p className="is-size-6 has-text-weight-semibold">{provider.name}</p>
             <p>{connected.displayName || connected.providerAccountId}</p>
-            {connected.scopes && <p className="is-size-7 has-text-grey">{connected.scopes}</p>}
+            {connected.scopes && (
+              <div className="scope-tags">
+                {connected.scopes
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .map((s, i) => (
+                    <span key={i} className="scope-tag is-size-7 has-text-grey">
+                      {s}
+                    </span>
+                  ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="level-right">

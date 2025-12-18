@@ -24,3 +24,33 @@ ul {
   list-style: disc inside;
 }
 
+/* Scope tag wrapping for connected account scopes in Settings */
+.scope-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin-top: 0.25rem;
+}
+.scope-tag {
+  background: #f5f7fb;
+  color: #4b5563;
+  border: 1px solid #e2e8f0;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  white-space: normal;
+}
+
+/* Stack scope tags on smaller screens */
+@media (max-width: 1200px) {
+  .scope-tags {
+    flex-direction: column;
+    gap: 0.25rem 0;
+  }
+  .scope-tag {
+    width: 100%;
+  }
+}
+
