@@ -498,7 +498,7 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
         <div className="field">
           <label className="label">Timeline file in Google Drive</label>
           <div className="control">
-            <div className="is-flex is-align-items-center" style={{ gap: '0.5rem' }}>
+            <div className="is-flex is-align-items-center gap-half">
               <span className={state.driveFileId ? 'tag is-success is-medium' : 'tag is-warning is-medium'}>
                 {state.driveFileId ? state.driveFileName : 'No file selected'}
               </span>

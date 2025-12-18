@@ -100,7 +100,7 @@ const BookmarkSection = ({ section }) => {
             {item.imageUrl ? (
               <div className="mr-3">
                 <a href={item.url} target="_blank" rel="noreferrer">
-                  <img src={item.imageUrl} alt="" style={{ width: 96, height: 'auto', borderRadius: 6 }} />
+                  <img src={item.imageUrl} alt="" className="bookmark-thumb" />
                 </a>
               </div>
             ) : null}
@@ -151,10 +151,10 @@ const MusicSection = ({ section }) => {
                 <div className="mr-3">
                   {play.url ? (
                     <a href={play.url} target="_blank" rel="noreferrer">
-                      <img src={play.albumImage} alt="" style={{ width: 64, height: 'auto', borderRadius: 6 }} />
+                      <img src={play.albumImage} alt="" className="album-thumb" />
                     </a>
                   ) : (
-                    <img src={play.albumImage} alt="" style={{ width: 64, height: 'auto', borderRadius: 6 }} />
+                    <img src={play.albumImage} alt="" className="album-thumb" />
                   )}
                 </div>
               ) : null}
