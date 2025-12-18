@@ -16,7 +16,7 @@ const source = 'email_bookmarks';
 const extractLinks = (text) => {
   if (!text) return [];
   const links = [];
-  const regex = /https?:\/\/[^\s<>"']+/gi;
+  const regex = /https?:\/\/[^\s<>"]+/gi;
   let match;
   while ((match = regex.exec(text)) !== null) {
     const url = match[0].replace(/[),.;]+$/, '');
@@ -76,6 +76,24 @@ const isConnectionError = (error) => {
   return message.includes('Connection not available') || message.includes('Socket timeout') || error?.code === 'NoConnection';
 };
 
+const enrichPending = async (items, pendingEnrichments) => {
+  const linkEnrichTimeout = Number(process.env.LINK_PREVIEW_TIMEOUT_MS || 15000);
+  for (const entry of pendingEnrichments) {
+    const { index, link } = entry;
+    if (!link || !items[index]) continue;
+
+    try {
+      const preview = await withTimeout(enrichLink(link), linkEnrichTimeout, 'enrichLink');
+      items[index].enrichment = { enrichmentType: 'readability_v1', data: preview };
+    } catch (err) {
+      items[index].enrichment = {
+        enrichmentType: 'readability_v1',
+        data: { status: 'error', error: err?.message ?? String(err) },
+      };
+    }
+  }
+};
+
 const collectForAccount = async (connectedAccount, cursor) => {
   const settings = connectedAccount.emailBookmarkSettings;
   if (!settings) {
@@ -128,15 +146,16 @@ const collectForAccount = async (connectedAccount, cursor) => {
     }
   };
 
+  const items = [];
+  const pendingEnrichments = [];
+  let maxUid = cursor ? Number(cursor) : null;
+
   let client = await createClient();
 
   try {
     const searchQuery = cursor ? { uid: `${Number(cursor) + 1}:*` } : { seen: false };
     const uids = await client.search(searchQuery, { uid: true });
     const sortedUids = [...uids].sort((a, b) => a - b);
-
-    const items = [];
-    let maxUid = cursor ? Number(cursor) : null;
 
     for (const uid of sortedUids) {
       let attempts = 0;
@@ -163,21 +182,7 @@ const collectForAccount = async (connectedAccount, cursor) => {
             };
 
             const externalId = `imap:${cfg.mailbox}:${uid}`;
-
-            let enrichment = null;
-            if (Array.isArray(links) && links.length > 0) {
-              const firstLink = links[0]?.url || links[0];
-              try {
-                const preview = await withTimeout(
-                  enrichLink(firstLink),
-                  Number(process.env.LINK_PREVIEW_TIMEOUT_MS || 15000),
-                  'enrichLink'
-                );
-                enrichment = { enrichmentType: 'readability_v1', data: preview };
-              } catch (err) {
-                enrichment = { enrichmentType: 'readability_v1', data: { status: 'error', error: err?.message ?? String(err) } };
-              }
-            }
+            const firstLink = Array.isArray(links) && links.length > 0 ? links[0]?.url || links[0] : null;
 
             items.push({
               eventType: 'BookmarkEvent',
@@ -185,8 +190,11 @@ const collectForAccount = async (connectedAccount, cursor) => {
               externalId,
               payload,
               userId: connectedAccount.userId,
-              ...(enrichment ? { enrichment } : {}),
             });
+
+            if (firstLink) {
+              pendingEnrichments.push({ index: items.length - 1, link: firstLink });
+            }
 
             try {
               await client.messageMove(uid, processedMailboxName, { uid: true });
@@ -229,12 +237,14 @@ const collectForAccount = async (connectedAccount, cursor) => {
         }
       }
     }
-
-    return { items, nextCursor: maxUid != null ? String(maxUid) : cursor };
   } finally {
     await closeClient(client);
   }
+
+  await enrichPending(items, pendingEnrichments);
+  return { items, nextCursor: maxUid != null ? String(maxUid) : cursor };
 };
+
 const collect = async () => {
   const accounts = await prisma.connectedAccount.findMany({
     where: { provider: source, status: 'active' },
