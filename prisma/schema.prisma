@@ -95,6 +95,7 @@ model JournalEntry {
   userId    String
   date      DateTime // normalized to local midnight
   content   String   // Markdown with optional frontmatter
+  goals     String?  // Morning goals (Markdown)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

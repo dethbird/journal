@@ -271,7 +271,6 @@ const JournalSection = ({ entry }) => {
   if (!entry) return null;
   const { frontmatter, body } = parseFrontmatter(entry.content);
   const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags : [];
-
   return (
     <div className="box">
       <div className="is-flex is-align-items-center is-justify-content-space-between mb-2">
@@ -291,6 +290,15 @@ const JournalSection = ({ entry }) => {
           <span>Edit</span>
         </a>
       </div>
+
+      {/* Goals section (from entry.goals) */}
+      {entry.goals ? (
+        <div className="mb-3">
+          <p className="has-text-weight-semibold">Goals</p>
+          <div className="content" dangerouslySetInnerHTML={{ __html: marked(entry.goals) }} />
+        </div>
+      ) : null}
+
       {body ? (
         <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(body) }} />
       ) : (

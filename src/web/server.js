@@ -1235,7 +1235,7 @@ app.get('/api/journal', async (request, reply) => {
     where: { userId_date: { userId: user.id, date: normalizedDate } },
   });
 
-  return { entry: entry ? { id: entry.id, date: entry.date.toISOString(), content: entry.content, updatedAt: entry.updatedAt.toISOString() } : null };
+  return { entry: entry ? { id: entry.id, date: entry.date.toISOString(), content: entry.content, goals: entry.goals || null, updatedAt: entry.updatedAt.toISOString() } : null };
 });
 
 /**
@@ -1247,19 +1247,20 @@ app.put('/api/journal', async (request, reply) => {
   const user = await getSessionUser(request);
   if (!user) return reply.status(401).send({ error: 'Not authenticated' });
 
-  const { date, content } = request.body ?? {};
+  const { date, content, goals } = request.body ?? {};
   if (!date) return reply.status(400).send({ error: 'date required' });
   if (typeof content !== 'string') return reply.status(400).send({ error: 'content must be a string' });
+  if (goals != null && typeof goals !== 'string') return reply.status(400).send({ error: 'goals must be a string' });
 
   const normalizedDate = normalizeToMidnight(date);
 
   const entry = await prisma.journalEntry.upsert({
     where: { userId_date: { userId: user.id, date: normalizedDate } },
-    update: { content },
-    create: { userId: user.id, date: normalizedDate, content },
+    update: { content, goals: goals ?? null },
+    create: { userId: user.id, date: normalizedDate, content, goals: goals ?? null },
   });
 
-  return { entry: { id: entry.id, date: entry.date.toISOString(), content: entry.content, updatedAt: entry.updatedAt.toISOString() } };
+  return { entry: { id: entry.id, date: entry.date.toISOString(), content: entry.content, goals: entry.goals || null, updatedAt: entry.updatedAt.toISOString() } };
 });
 
 /**

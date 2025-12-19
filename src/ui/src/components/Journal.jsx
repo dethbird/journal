@@ -51,12 +51,14 @@ const buildFrontmatter = (fm) => {
 export default function Journal({ date, dateLabel }) {
   const [state, setState] = useState({ loading: true, error: null, entry: null });
   const [content, setContent] = useState('');
+  const [goals, setGoals] = useState('');
   const [saveState, setSaveState] = useState({ saving: false, message: null, error: null });
   const [mood, setMood] = useState('');
   const [energy, setEnergy] = useState('');
   const [tags, setTags] = useState('');
   const autoSaveTimer = useRef(null);
   const lastSavedContent = useRef('');
+  const lastSavedGoals = useRef('');
 
   // Load entry when date changes
   useEffect(() => {
@@ -70,14 +72,16 @@ export default function Journal({ date, dateLabel }) {
         if (!cancelled) {
           const entryContent = data.entry?.content || '';
           setState({ loading: false, error: null, entry: data.entry });
-          
+
           // Parse frontmatter
           const { frontmatter, body } = parseFrontmatter(entryContent);
           setContent(body);
+          setGoals(data.entry?.goals || '');
           setMood(frontmatter.mood || '');
           setEnergy(frontmatter.energy || '');
           setTags(Array.isArray(frontmatter.tags) ? frontmatter.tags.join(', ') : (frontmatter.tags || ''));
           lastSavedContent.current = entryContent;
+          lastSavedGoals.current = data.entry?.goals || '';
         }
       } catch (err) {
         if (!cancelled) setState({ loading: false, error: err.message, entry: null });
@@ -102,7 +106,7 @@ export default function Journal({ date, dateLabel }) {
   // Save entry
   const save = async () => {
     const fullContent = buildFullContent();
-    if (fullContent === lastSavedContent.current) return; // No changes
+    if (fullContent === lastSavedContent.current && goals === lastSavedGoals.current) return; // No changes
 
     setSaveState({ saving: true, message: null, error: null });
     try {
@@ -110,13 +114,14 @@ export default function Journal({ date, dateLabel }) {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, content: fullContent }),
+        body: JSON.stringify({ date, content: fullContent, goals }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Save failed (${res.status})`);
       }
       lastSavedContent.current = fullContent;
+      lastSavedGoals.current = goals;
       setSaveState({ saving: false, message: 'Saved', error: null });
       setTimeout(() => setSaveState((s) => ({ ...s, message: null })), 1500);
     } catch (err) {
@@ -133,7 +138,7 @@ export default function Journal({ date, dateLabel }) {
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [content, mood, energy, tags]);
+  }, [content, mood, energy, tags, goals]);
 
   if (state.loading) {
     return (
@@ -175,6 +180,35 @@ export default function Journal({ date, dateLabel }) {
               <span>Save</span>
             </button>
           </div>
+        </div>
+
+        <div className="field mb-3">
+          <label className="label is-small">Goals (morning)</label>
+          <div className="control">
+            <textarea
+              className="textarea is-small"
+              rows={4}
+              placeholder="Your goals for the day (Markdown supported)"
+              value={goals}
+              onChange={(e) => setGoals(e.target.value)}
+              onBlur={save}
+            />
+          </div>
+          <p className="help has-text-grey">Saved separately from the main journal content.</p>
+        </div>
+
+        <div className="field">
+          <div className="control">
+            <textarea
+              className="textarea"
+              rows={12}
+              placeholder="Write your journal entry here… (Markdown supported)"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              onBlur={save}
+            />
+          </div>
+          <p className="help has-text-grey">Auto-saves after 1.5 seconds of inactivity</p>
         </div>
 
         <div className="columns mb-3">
@@ -220,20 +254,6 @@ export default function Journal({ date, dateLabel }) {
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="field">
-          <div className="control">
-            <textarea
-              className="textarea"
-              rows={12}
-              placeholder="Write your journal entry here… (Markdown supported)"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              onBlur={save}
-            />
-          </div>
-          <p className="help has-text-grey">Auto-saves after 1.5 seconds of inactivity</p>
         </div>
       </div>
     </div>
