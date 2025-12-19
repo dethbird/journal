@@ -102,17 +102,51 @@ node src/web/server.js
 
 6. Running collectors
 
-- Collector code lives under `src/collector`. There are multiple sources (`timeline`, `email`, `github`, `spotify`). You can run collectors manually with Node for testing (example):
 
 ```bash
 # run a collector runner (depends on local scripts)
 node src/collector/run.js
 ```
 
-Adjust commands to match scripts in `package.json` (e.g. `npm run collector` if present).
-
 ## Scheduled Jobs (Systemd / Cron)
 
+
+### PM2 setup (VM or VPS)
+
+If you'll use `pm2` to keep the server running, follow these steps on your VM/VPS:
+
+1. Install pm2 globally:
+
+```bash
+sudo npm install -g pm2
+```
+
+2. From the project root, build the UI and start the process with pm2:
+
+```bash
+npm run ui:build
+pm2 start ecosystem.config.js --env production
+pm2 save
+```
+
+3. Configure startup on reboot (systemd):
+
+```bash
+pm2 startup systemd
+# run the command pm2 prints (sudo) to enable startup
+```
+
+4. Useful pm2 commands:
+
+```bash
+pm2 status
+pm2 logs evidence-journal
+pm2 restart evidence-journal
+pm2 stop evidence-journal
+pm2 delete evidence-journal
+```
+
+Note: `ecosystem.config.js` is included in the repo; edit it to set `cwd` or adjust logging paths for your environment.
 For production use, set up automated scheduling:
 
 ### Collector (every 30 minutes)

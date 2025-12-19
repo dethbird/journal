@@ -18,6 +18,10 @@
     "test-db": "node scripts/test-db.js",
     "reset-events": "node scripts/reset-events.js",
     "reset-cursor": "node scripts/reset-cursor.js"
+    ,"pm2:build":"npm run ui:build"
+    ,"pm2:start":"pm2 start ecosystem.config.js --env production"
+    ,"pm2:restart":"pm2 reload ecosystem.config.js --env production"
+    ,"pm2:stop":"pm2 stop ecosystem.config.js --env production"
   },
   "dependencies": {
     "@fastify/cookie": "^7.4.0",

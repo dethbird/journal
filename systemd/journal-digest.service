@@ -5,7 +5,7 @@ After=network.target postgresql.service
 [Service]
 Type=oneshot
 User=YOUR_USER
-WorkingDirectory=/path/to/journal
+WorkingDirectory=/home/code/journal
 ExecStart=/usr/bin/node scripts/send-digest-email.js
 StandardOutput=journal
 StandardError=journal
@@ -13,7 +13,7 @@ SyslogIdentifier=journal-digest
 
 # Environment
 Environment="NODE_ENV=production"
-EnvironmentFile=-/path/to/journal/.env
+EnvironmentFile=-/home/code/journal/.env
 
 [Install]
 WantedBy=multi-user.target
