@@ -87,6 +87,7 @@ model User {
   events            Event[]
   emailDelivery     UserEmailDelivery?
   journalEntries    JournalEntry[]
+  collectorRuns     CollectorRun[]
 }
 
 model JournalEntry {
@@ -204,4 +205,23 @@ model OAuthToken {
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   connectedAccount    ConnectedAccount  @relation(fields: [connectedAccountId], references: [id])
+}
+
+model CollectorRun {
+  id          String    @id @default(cuid())
+  userId      String
+  pid         Int?      // process ID when running
+  status      String    @default("running") // running, completed, failed, cancelled
+  startedAt   DateTime  @default(now())
+  finishedAt  DateTime?
+  eventCount  Int       @default(0) // events collected in this run
+  error       String?   // error message if failed
+  triggerType String    @default("manual") // manual, scheduled, webhook
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, startedAt])
+  @@index([status])
 }

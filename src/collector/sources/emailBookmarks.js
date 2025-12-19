@@ -210,6 +210,8 @@ const collectForAccount = async (connectedAccount, cursor) => {
 
           const { subject, from, to, messageId, date, links, snippet } = await parseMessage(rawSource);
           const occurredAt = internalDate || date || new Date();
+          const firstLink = Array.isArray(links) && links.length > 0 ? links[0]?.url || links[0] : null;
+          
           const payload = {
             mailbox: cfg.mailbox,
             uid,
@@ -222,8 +224,9 @@ const collectForAccount = async (connectedAccount, cursor) => {
             raw: { snippet },
           };
 
-          const externalId = `imap:${cfg.mailbox}:${uid}`;
-          const firstLink = Array.isArray(links) && links.length > 0 ? links[0]?.url || links[0] : null;
+          // Use the link URL as externalId for deduplication (not the mailbox+UID)
+          // This prevents the same link from being added twice even if the email is moved
+          const externalId = firstLink ? `link:${firstLink}` : `imap:${cfg.mailbox}:${uid}`;
 
           items.push({
             eventType: 'BookmarkEvent',

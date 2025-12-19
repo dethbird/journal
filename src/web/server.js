@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import nodemailer from 'nodemailer';
+import { spawn } from 'node:child_process';
 
 import prisma from '../lib/prismaClient.js';
 import buildDigestViewModel from '../digest/viewModel.js';
@@ -1285,6 +1286,200 @@ app.delete('/api/journal', async (request, reply) => {
     }
     throw err;
   }
+});
+
+// Collector API
+
+/**
+ * Get latest collector runs and status
+ */
+app.get('/api/collector/status', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const latestRuns = await prisma.collectorRun.findMany({
+    where: { userId: user.id },
+    orderBy: { startedAt: 'desc' },
+    take: 5
+  });
+
+  // Check if any running processes are actually still alive
+  for (const run of latestRuns) {
+    if (run.status === 'running' && run.pid) {
+      try {
+        // Send signal 0 to check if process exists
+        process.kill(run.pid, 0);
+      } catch (err) {
+        // Process is dead, mark as failed
+        await prisma.collectorRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'failed',
+            finishedAt: new Date(),
+            error: 'Process died unexpectedly'
+          }
+        });
+        run.status = 'failed';
+        run.finishedAt = new Date();
+        run.error = 'Process died unexpectedly';
+      }
+    }
+  }
+
+  const currentRunning = latestRuns.find(run => run.status === 'running');
+  
+  return {
+    currentRunning,
+    recentRuns: latestRuns,
+    canStart: !currentRunning
+  };
+});
+
+/**
+ * Start collector run
+ */
+app.post('/api/collector/start', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  // Check if already running
+  const existingRun = await prisma.collectorRun.findFirst({
+    where: {
+      userId: user.id,
+      status: 'running'
+    }
+  });
+
+  if (existingRun) {
+    return reply.status(409).send({ error: 'Collector is already running' });
+  }
+
+  // Create new run record
+  const run = await prisma.collectorRun.create({
+    data: {
+      userId: user.id,
+      status: 'running',
+      triggerType: 'manual'
+    }
+  });
+
+  try {
+    // Spawn collector process
+    const collectorPath = path.join(__dirname, '..', 'collector', 'run.js');
+    const child = spawn('node', [collectorPath], {
+      stdio: 'pipe',
+      detached: true,
+      env: { ...process.env, USER_ID: user.id }
+    });
+
+    // Update run with PID
+    await prisma.collectorRun.update({
+      where: { id: run.id },
+      data: { pid: child.pid }
+    });
+
+    // Set up handlers for process completion
+    child.on('exit', async (code) => {
+      try {
+        const finalStatus = code === 0 ? 'completed' : 'failed';
+        const errorMsg = code !== 0 ? `Process exited with code ${code}` : null;
+        
+        // Count events created during this run (rough estimate)
+        const eventCount = await prisma.event.count({
+          where: {
+            userId: user.id,
+            createdAt: {
+              gte: run.startedAt
+            }
+          }
+        });
+
+        await prisma.collectorRun.update({
+          where: { id: run.id },
+          data: {
+            status: finalStatus,
+            finishedAt: new Date(),
+            eventCount,
+            error: errorMsg,
+            pid: null
+          }
+        });
+      } catch (err) {
+        console.error('Failed to update collector run on exit:', err);
+      }
+    });
+
+    // Detach so parent process doesn't wait
+    child.unref();
+
+    return {
+      runId: run.id,
+      pid: child.pid,
+      status: 'started'
+    };
+  } catch (err) {
+    // Mark run as failed
+    await prisma.collectorRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'failed',
+        finishedAt: new Date(),
+        error: err.message
+      }
+    });
+
+    request.log.error(err, 'Failed to start collector');
+    return reply.status(500).send({ error: 'Failed to start collector' });
+  }
+});
+
+/**
+ * Cancel running collector
+ */
+app.post('/api/collector/cancel', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const runningCollector = await prisma.collectorRun.findFirst({
+    where: {
+      userId: user.id,
+      status: 'running'
+    }
+  });
+
+  if (!runningCollector) {
+    return reply.status(404).send({ error: 'No running collector found' });
+  }
+
+  if (runningCollector.pid) {
+    try {
+      // Try to kill the process gracefully
+      process.kill(runningCollector.pid, 'SIGTERM');
+      
+      // Wait a bit then force kill if needed
+      setTimeout(() => {
+        try {
+          process.kill(runningCollector.pid, 'SIGKILL');
+        } catch (err) {
+          // Process may have already died
+        }
+      }, 5000);
+    } catch (err) {
+      // Process may have already died
+    }
+  }
+
+  // Mark as cancelled
+  await prisma.collectorRun.update({
+    where: { id: runningCollector.id },
+    data: {
+      status: 'cancelled',
+      finishedAt: new Date(),
+      pid: null
+    }
+  });
+
+  return { ok: true };
 });
 
 app.get('/health', async () => ({ status: 'ok' }));

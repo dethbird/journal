@@ -4,6 +4,85 @@ import Journal from './components/Journal';
 import Settings from './components/Settings';
 import { CONNECT_PROVIDERS } from './constants';
 
+const CollectorControls = ({ onStatusChange }) => {
+  const [status, setStatus] = useState({ loading: true, canStart: false, currentRunning: null, recentRuns: [] });
+  const [operation, setOperation] = useState({ running: false, error: null });
+
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch('/api/collector/status', { credentials: 'include' });
+      if (!res.ok) throw new Error(`Status check failed (${res.status})`);
+      const data = await res.json();
+      setStatus({ ...data, loading: false });
+      setOperation({ running: false, error: null });
+      if (onStatusChange) onStatusChange(data);
+    } catch (err) {
+      setStatus({ ...status, loading: false });
+      setOperation({ running: false, error: err.message });
+    }
+  };
+
+  const startCollector = async () => {
+    try {
+      setOperation({ running: true, error: null });
+      const res = await fetch('/api/collector/start', { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Start failed (${res.status})`);
+      }
+      setTimeout(fetchStatus, 500);
+    } catch (err) {
+      setOperation({ running: false, error: err.message });
+    }
+  };
+
+  const cancelCollector = async () => {
+    try {
+      setOperation({ running: true, error: null });
+      const res = await fetch('/api/collector/cancel', { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Cancel failed (${res.status})`);
+      }
+      setTimeout(fetchStatus, 500);
+    } catch (err) {
+      setOperation({ running: false, error: err.message });
+    }
+  };
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(() => {
+      if (status.currentRunning) {
+        fetchStatus();
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [status.currentRunning]);
+
+  const isRunning = !!status.currentRunning;
+
+  return (
+    <button
+      className={`button is-light${operation.running ? ' is-loading' : ''}${isRunning ? ' is-warning' : ''}`}
+      onClick={isRunning ? cancelCollector : startCollector}
+      disabled={(!status.canStart && !isRunning) || operation.running || status.loading}
+      title={isRunning ? 'Stop collection' : 'Start data collection'}
+      aria-label={isRunning ? 'Stop collection' : 'Start collection'}
+    >
+      <span className="icon">
+        <i className={`fa-solid ${isRunning ? 'fa-stop' : 'fa-play'}`} />
+      </span>
+    </button>
+  );
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const startOfDay = (date) => {
@@ -52,6 +131,7 @@ function App() {
   const [path, setPath] = useState(window.location.pathname || '/');
   const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
   const [offsetDays, setOffsetDays] = useState(0);
+  const [collectorStatus, setCollectorStatus] = useState(null);
 
   // Compute current selected date from offset
   const todayStart = startOfDay(new Date());
@@ -105,6 +185,17 @@ function App() {
                     <h1 className="title is-2">Hello, {state.user.displayName || 'friend'}</h1>
                     {sendState.message ? <p className="help is-success">{sendState.message}</p> : null}
                     {sendState.error ? <p className="help is-danger">{sendState.error}</p> : null}
+                    {collectorStatus?.recentRuns?.[0] && !collectorStatus.currentRunning && (
+                      <p className="help is-info">
+                        Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
+                        {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
+                      </p>
+                    )}
+                    {collectorStatus?.currentRunning && (
+                      <p className="help is-warning">
+                        Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="level-right">
@@ -158,6 +249,7 @@ function App() {
                         <i className="fa-solid fa-pen-to-square" />
                       </span>
                     </button>
+                    <CollectorControls onStatusChange={setCollectorStatus} />
                     <button
                       className={`button is-light${sendState.sending ? ' is-loading' : ''}`}
                       title="Send digest"
