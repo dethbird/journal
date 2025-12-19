@@ -1230,7 +1230,12 @@ app.post('/api/disconnect', async (request, reply) => {
     const existing = await prisma.connectedAccount.findFirst({ where: { userId: user.id, provider } });
     if (!existing) return reply.status(404).send({ error: 'Connected account not found' });
 
+    // Remove related records to avoid foreign-key constraint errors
     await prisma.oAuthToken.deleteMany({ where: { connectedAccountId: existing.id } });
+    await prisma.cursor.deleteMany({ where: { connectedAccountId: existing.id } });
+    await prisma.googleTimelineSettings.deleteMany({ where: { connectedAccountId: existing.id } });
+    await prisma.emailBookmarkSettings.deleteMany({ where: { connectedAccountId: existing.id } });
+
     await prisma.connectedAccount.delete({ where: { id: existing.id } });
 
     return { ok: true };
