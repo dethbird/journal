@@ -1,9 +1,92 @@
 import crypto from 'node:crypto';
 import { registerCollector } from '../registry.js';
 import prisma from '../../lib/prismaClient.js';
-import buildWeatherEnrichment from '../enrichers/weather.js';
 
 const source = 'google_timeline';
+const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const clientId = process.env.GOOGLE_CLIENT_ID;
+const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const EXPIRY_SKEW_MS = 60 * 1000;
+const FETCH_TIMEOUT_MS = 120 * 1000; // 2 minutes
+const MAX_SEGMENTS_PER_RUN = 1000; // Process up to 1000 segments per run
+const PROGRESS_LOG_INTERVAL = 100; // Log progress every N segments
+
+const latestToken = (tokens = []) => {
+  if (!Array.isArray(tokens) || tokens.length === 0) return null;
+  return [...tokens].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
+};
+
+const needsRefresh = (token) => {
+  if (!token?.expiresAt) return false;
+  return new Date(token.expiresAt).getTime() - EXPIRY_SKEW_MS <= Date.now();
+};
+
+const storeToken = async (connectedAccountId, tokenResponse, fallbackRefreshToken) => {
+  const expiresAt =
+    tokenResponse.expires_in != null
+      ? new Date(Date.now() + Number(tokenResponse.expires_in) * 1000)
+      : null;
+
+  return prisma.oAuthToken.create({
+    data: {
+      connectedAccountId,
+      accessToken: tokenResponse.access_token,
+      refreshToken: tokenResponse.refresh_token ?? fallbackRefreshToken ?? null,
+      tokenType: tokenResponse.token_type ?? null,
+      scope: tokenResponse.scope ?? null,
+      expiresAt,
+      tokenJson: tokenResponse,
+    },
+  });
+};
+
+const refreshAccessToken = async (connectedAccount, refreshToken) => {
+  if (!clientId || !clientSecret) {
+    console.warn('[timeline] Google refresh failed: client id/secret missing');
+    return null;
+  }
+  if (!refreshToken) {
+    console.warn(`[timeline] Google refresh failed: missing refresh_token for connectedAccount=${connectedAccount.id}`);
+    return null;
+  }
+
+  const params = new URLSearchParams();
+  params.set('grant_type', 'refresh_token');
+  params.set('refresh_token', refreshToken);
+  params.set('client_id', clientId);
+  params.set('client_secret', clientSecret);
+
+  const res = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.warn(`[timeline] Google refresh failed (${res.status}): ${body}`);
+    return null;
+  }
+
+  const token = await res.json();
+  return storeToken(connectedAccount.id, token, refreshToken);
+};
+
+const resolveAccessToken = async (connectedAccount) => {
+  const tokenRecord = latestToken(connectedAccount.oauthTokens);
+  if (!tokenRecord) return { accessToken: null, tokenRecord: null };
+
+  if (needsRefresh(tokenRecord) && tokenRecord.refreshToken) {
+    try {
+      const refreshed = await refreshAccessToken(connectedAccount, tokenRecord.refreshToken);
+      if (refreshed) return { accessToken: refreshed.accessToken, tokenRecord: refreshed };
+    } catch (err) {
+      console.warn('[timeline] Google token refresh threw:', err?.message ?? err);
+    }
+  }
+
+  return { accessToken: tokenRecord.accessToken, tokenRecord };
+};
 
 /**
  * Parse lat/lng from Google Timeline format: "39.1085173°, -84.515728°"
@@ -200,24 +283,8 @@ const processSegment = async (segment, userId) => {
   // Store canonical string in payload for debugging
   payload.canonical = externalIdData.canonical;
   
-  // Build enrichment for location data (visits and activities have coordinates)
-  let enrichment = null;
-  if (payload.location || payload.startLocation) {
-    const lat = payload.location?.lat ?? payload.startLocation?.lat;
-    const lng = payload.location?.lng ?? payload.startLocation?.lng;
-    if (lat && lng) {
-      // Create a minimal event object for enrichment
-      const eventForEnrichment = {
-        payload: {
-          latitude: lat,
-          longitude: lng,
-          timezone: segment.timeZone ?? 'UTC',
-        },
-        occurredAt: new Date(segment.startTime),
-      };
-      enrichment = await buildWeatherEnrichment(eventForEnrichment);
-    }
-  }
+  // Note: Weather enrichment is now done via backfill script (scripts/backfill-weather.js)
+  // to avoid blocking the collector on external API calls for every segment
   
   return {
     source,
@@ -226,23 +293,36 @@ const processSegment = async (segment, userId) => {
     externalId: externalIdData.externalId,
     payload,
     userId,
-    enrichment,
   };
 };
 
 /**
- * Fetch file content from Google Drive using access token
+ * Fetch file content from Google Drive using access token with timeout
  */
 const fetchDriveFile = async (fileId, accessToken) => {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Drive API error (${res.status}): ${text}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Drive API error (${res.status}): ${text}`);
+    }
+    return res.json();
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error(`Drive fetch timed out after ${FETCH_TIMEOUT_MS / 1000}s`);
+    }
+    throw err;
   }
-  return res.json();
 };
 
 /**
@@ -261,15 +341,16 @@ const parseTimelineSegments = function* (data) {
 const collectForAccount = async (account, cursor) => {
   const userId = account.userId;
   const settings = account.googleTimelineSettings;
-  const token = account.oauthTokens?.[0];
-
-  if (!token?.accessToken) {
-    console.warn(`[timeline] No access token for user ${userId}, skipping`);
-    return { items: [], nextCursor: cursor };
-  }
 
   if (!settings?.driveFileId) {
     console.warn(`[timeline] No driveFileId configured for user ${userId}, skipping`);
+    return { items: [], nextCursor: cursor };
+  }
+
+  // Resolve and potentially refresh the access token
+  const { accessToken, tokenRecord } = await resolveAccessToken(account);
+  if (!accessToken) {
+    console.warn(`[timeline] No access token for user ${userId}, skipping`);
     return { items: [], nextCursor: cursor };
   }
 
@@ -277,15 +358,52 @@ const collectForAccount = async (account, cursor) => {
 
   const items = [];
   let maxTime = cursor ? new Date(cursor) : null;
+  let accessTokenInUse = accessToken;
+  let refreshAttempted = false;
 
   try {
-    const data = await fetchDriveFile(settings.driveFileId, token.accessToken);
+    let data;
+    try {
+      data = await fetchDriveFile(settings.driveFileId, accessTokenInUse);
+    } catch (err) {
+      // Retry once with token refresh if we get a 401
+      if (err.message.includes('401') && tokenRecord?.refreshToken && !refreshAttempted) {
+        console.warn(`[timeline] Drive 401 for user ${userId}, attempting token refresh...`);
+        refreshAttempted = true;
+        const refreshed = await refreshAccessToken(account, tokenRecord.refreshToken);
+        if (refreshed?.accessToken) {
+          accessTokenInUse = refreshed.accessToken;
+          data = await fetchDriveFile(settings.driveFileId, accessTokenInUse);
+        } else {
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
+
+    const totalSegments = data.semanticSegments?.length ?? 0;
+    console.info(`[timeline] User ${userId}: Timeline.json fetched successfully, found ${totalSegments} segments`);
 
     let processed = 0;
     let skipped = 0;
+    let examined = 0;
     const lastProcessedTime = cursor ? new Date(cursor) : null;
 
     for (const segment of parseTimelineSegments(data)) {
+      examined++;
+
+      // Log progress periodically
+      if (examined % PROGRESS_LOG_INTERVAL === 0) {
+        console.info(`[timeline] User ${userId}: examined ${examined}/${totalSegments} segments (${processed} processed, ${skipped} skipped)`);
+      }
+
+      // Stop if we've hit the per-run limit
+      if (processed >= MAX_SEGMENTS_PER_RUN) {
+        console.info(`[timeline] User ${userId}: reached limit of ${MAX_SEGMENTS_PER_RUN} processed segments, stopping`);
+        break;
+      }
+
       const segmentTime = new Date(segment.startTime);
 
       // Skip if we've already processed this
@@ -294,7 +412,7 @@ const collectForAccount = async (account, cursor) => {
         continue;
       }
 
-      const item = await processSegment(segment, userId);
+      const item = processSegment(segment, userId);
       if (item) {
         items.push(item);
         processed++;
@@ -307,7 +425,7 @@ const collectForAccount = async (account, cursor) => {
       }
     }
 
-    console.info(`[timeline] User ${userId}: processed ${processed} events, skipped ${skipped} segments`);
+    console.info(`[timeline] User ${userId}: finished processing ${processed} events, skipped ${skipped} segments (examined ${examined}/${totalSegments})`);
 
     // Update lastSyncedAt
     await prisma.googleTimelineSettings.update({
