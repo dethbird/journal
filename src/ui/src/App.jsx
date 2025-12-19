@@ -1,7 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import Digest from './components/Digest';
+import Journal from './components/Journal';
 import Settings from './components/Settings';
 import { CONNECT_PROVIDERS } from './constants';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const startOfDay = (date) => {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const formatDateLabel = (date) => {
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+};
+
+const formatDateISO = (date) => {
+  // Return YYYY-MM-DD in local time
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 const LoginView = () => (
   <div className="box">
@@ -30,6 +51,13 @@ function App() {
   const [state, setState] = useState({ loading: true, user: null, error: null });
   const [path, setPath] = useState(window.location.pathname || '/');
   const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
+  const [offsetDays, setOffsetDays] = useState(0);
+
+  // Compute current selected date from offset
+  const todayStart = startOfDay(new Date());
+  const selectedDate = new Date(todayStart.getTime() + offsetDays * DAY_MS);
+  const selectedDateISO = formatDateISO(selectedDate);
+  const selectedDateLabel = formatDateLabel(selectedDate);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname || '/');
@@ -82,6 +110,27 @@ function App() {
                 <div className="level-right">
                   <div className="buttons">
                     <button
+                      className="button is-small"
+                      onClick={() => setOffsetDays((d) => d - 1)}
+                      title="Previous day"
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-chevron-left" />
+                      </span>
+                    </button>
+                    <span className="button is-static is-small">{selectedDateLabel}</span>
+                    <button
+                      className="button is-small"
+                      onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
+                      disabled={offsetDays >= 0}
+                      title="Next day"
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-chevron-right" />
+                      </span>
+                    </button>
+                    <span className="mx-2" />
+                    <button
                       className="button is-light"
                       title="Digest"
                       aria-label="Digest"
@@ -93,6 +142,20 @@ function App() {
                     >
                       <span className="icon">
                         <i className="fa-solid fa-house" />
+                      </span>
+                    </button>
+                    <button
+                      className="button is-light"
+                      title="Journal"
+                      aria-label="Journal"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.history.pushState({}, '', '/journal');
+                        setPath('/journal');
+                      }}
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-pen-to-square" />
                       </span>
                     </button>
                     <button
@@ -187,9 +250,11 @@ function App() {
                       setState({ loading: false, user: null, error: null });
                     }}
                   />
+                ) : path === '/journal' ? (
+                  <Journal date={selectedDateISO} dateLabel={selectedDateLabel} />
                 ) : (
                   <div>
-                    <Digest />
+                    <Digest offsetDays={offsetDays} />
                   </div>
                 )}
               </div>

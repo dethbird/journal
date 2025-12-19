@@ -1204,6 +1204,89 @@ app.post('/api/google-timeline/settings', async (request, reply) => {
   return { settings: serializeGoogleTimelineSettings(settings) };
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Journal Entry API
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Normalize date to midnight UTC for consistent storage
+ */
+const normalizeToMidnight = (dateStr) => {
+  const d = new Date(dateStr);
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+};
+
+/**
+ * GET /api/journal?date=YYYY-MM-DD
+ * Fetch journal entry for a specific date
+ */
+app.get('/api/journal', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { date } = request.query;
+  if (!date) return reply.status(400).send({ error: 'date query param required' });
+
+  const normalizedDate = normalizeToMidnight(date);
+
+  const entry = await prisma.journalEntry.findUnique({
+    where: { userId_date: { userId: user.id, date: normalizedDate } },
+  });
+
+  return { entry: entry ? { id: entry.id, date: entry.date.toISOString(), content: entry.content, updatedAt: entry.updatedAt.toISOString() } : null };
+});
+
+/**
+ * PUT /api/journal
+ * Create or update journal entry for a specific date
+ * Body: { date: "YYYY-MM-DD", content: "markdown string" }
+ */
+app.put('/api/journal', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { date, content } = request.body ?? {};
+  if (!date) return reply.status(400).send({ error: 'date required' });
+  if (typeof content !== 'string') return reply.status(400).send({ error: 'content must be a string' });
+
+  const normalizedDate = normalizeToMidnight(date);
+
+  const entry = await prisma.journalEntry.upsert({
+    where: { userId_date: { userId: user.id, date: normalizedDate } },
+    update: { content },
+    create: { userId: user.id, date: normalizedDate, content },
+  });
+
+  return { entry: { id: entry.id, date: entry.date.toISOString(), content: entry.content, updatedAt: entry.updatedAt.toISOString() } };
+});
+
+/**
+ * DELETE /api/journal?date=YYYY-MM-DD
+ * Delete journal entry for a specific date
+ */
+app.delete('/api/journal', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { date } = request.query;
+  if (!date) return reply.status(400).send({ error: 'date query param required' });
+
+  const normalizedDate = normalizeToMidnight(date);
+
+  try {
+    await prisma.journalEntry.delete({
+      where: { userId_date: { userId: user.id, date: normalizedDate } },
+    });
+    return { ok: true };
+  } catch (err) {
+    if (err.code === 'P2025') {
+      return reply.status(404).send({ error: 'Entry not found' });
+    }
+    throw err;
+  }
+});
+
 app.get('/health', async () => ({ status: 'ok' }));
 
 app.post('/api/logout', async (request, reply) => {

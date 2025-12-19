@@ -25,19 +25,46 @@ const formatTime = (iso) => {
   }
 };
 
-const formatDate = (iso) => {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-  } catch (e) {
-    return iso;
-  }
+const formatDateISO = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 const cToF = (c) => {
   const n = Number(c);
   if (!Number.isFinite(n)) return '';
   return Math.round(((n * 9) / 5 + 32) * 10) / 10;
+};
+
+/**
+ * Parse frontmatter from markdown content.
+ */
+const parseFrontmatter = (content) => {
+  if (!content || !content.startsWith('---')) {
+    return { frontmatter: {}, body: content || '' };
+  }
+  const endIdx = content.indexOf('\n---', 3);
+  if (endIdx === -1) {
+    return { frontmatter: {}, body: content };
+  }
+  const fmBlock = content.slice(4, endIdx);
+  const body = content.slice(endIdx + 4).replace(/^\n/, '');
+
+  const frontmatter = {};
+  for (const line of fmBlock.split('\n')) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim();
+      let value = line.slice(colonIdx + 1).trim();
+      if (value.startsWith('[') && value.endsWith(']')) {
+        value = value.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean);
+      }
+      frontmatter[key] = value;
+    }
+  }
+  return { frontmatter, body };
 };
 
 const GithubSection = ({ section }) => {
@@ -236,26 +263,87 @@ const TimelineSection = ({ section }) => {
   );
 };
 
-export default function Digest() {
+const JournalSection = ({ entry }) => {
+  if (!entry) return null;
+  const { frontmatter, body } = parseFrontmatter(entry.content);
+  const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags : [];
+
+  return (
+    <div className="box">
+      <div className="is-flex is-align-items-center is-justify-content-space-between mb-2">
+        <p className="title is-5 mb-0">Journal</p>
+        <a
+          href="/journal"
+          className="button is-small is-light"
+          onClick={(e) => {
+            e.preventDefault();
+            window.history.pushState({}, '', '/journal');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }}
+        >
+          <span className="icon">
+            <i className="fa-solid fa-pen-to-square" />
+          </span>
+          <span>Edit</span>
+        </a>
+      </div>
+      {(frontmatter.mood || frontmatter.energy || tags.length > 0) && (
+        <div className="mb-3">
+          {frontmatter.mood && (
+            <span className="tag is-info is-light mr-2">Mood: {frontmatter.mood}</span>
+          )}
+          {frontmatter.energy && (
+            <span className="tag is-success is-light mr-2">Energy: {frontmatter.energy}</span>
+          )}
+          {tags.map((tag) => (
+            <span key={tag} className="tag is-light mr-1">{tag}</span>
+          ))}
+        </div>
+      )}
+      {body ? (
+        <div className="content" style={{ whiteSpace: 'pre-wrap' }}>{body}</div>
+      ) : (
+        <p className="has-text-grey">No journal content</p>
+      )}
+    </div>
+  );
+};
+
+export default function Digest({ offsetDays = 0 }) {
   const [state, setState] = useState({ loading: true, error: null, vm: null });
-  const [offsetDays, setOffsetDays] = useState(0);
+  const [journalEntry, setJournalEntry] = useState(null);
   const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
     const { start, end } = buildWindow(offsetDays);
+    const dateISO = formatDateISO(start);
 
     const load = async () => {
       try {
         setState({ loading: true, error: null, vm: null });
+        setJournalEntry(null);
 
-        const params = new URLSearchParams({ since: start.toISOString(), until: end.toISOString() });
-        const res = await fetch(`/api/digest?${params.toString()}`, { credentials: 'include' });
-        if (!res.ok) {
-          throw new Error(`Digest fetch failed (${res.status})`);
+        // Fetch digest and journal in parallel
+        const [digestRes, journalRes] = await Promise.all([
+          fetch(`/api/digest?since=${start.toISOString()}&until=${end.toISOString()}`, { credentials: 'include' }),
+          fetch(`/api/journal?date=${dateISO}`, { credentials: 'include' }),
+        ]);
+
+        if (!digestRes.ok) {
+          throw new Error(`Digest fetch failed (${digestRes.status})`);
         }
-        const data = await res.json();
-        if (!cancelled) setState({ loading: false, error: null, vm: data });
+        const digestData = await digestRes.json();
+
+        let journalData = null;
+        if (journalRes.ok) {
+          journalData = await journalRes.json();
+        }
+
+        if (!cancelled) {
+          setState({ loading: false, error: null, vm: digestData });
+          setJournalEntry(journalData?.entry || null);
+        }
       } catch (err) {
         if (!cancelled) setState({ loading: false, error: err.message, vm: null });
       }
@@ -305,64 +393,39 @@ export default function Digest() {
   }
 
   const { vm } = state;
-  const windowStart = vm?.window?.start;
-  const windowEnd = vm?.window?.end;
-  const focusedStart = startOfDay(new Date());
-  const displayStart = new Date(focusedStart.getTime() + offsetDays * DAY_MS);
-  const windowLabel = formatDate(displayStart.toISOString());
   const weather = vm?.weather;
   return (
     <div>
+      {/* Journal entry at the top if present */}
+      <JournalSection entry={journalEntry} />
+
       <div className="box">
         <div className="is-flex is-align-items-center is-justify-content-space-between">
           <h2 className="title is-4 mb-0">Digest</h2>
           <div className="is-flex is-align-items-center">
             <button
-              className="button is-small mr-2"
-              onClick={() => setOffsetDays((d) => d - 1)}
-              disabled={state.loading}
-              title="Previous day"
+              className={`button is-small is-info mr-2${sendState.sending ? ' is-loading' : ''}`}
+              onClick={handleSend}
+              disabled={sendState.sending}
+              title="Send digest for this window"
             >
               <span className="icon">
-                <i className="fa-solid fa-chevron-left" />
+                <i className="fa-solid fa-envelope" />
               </span>
-              <span className="is-hidden-mobile">Prev</span>
+              <span className="is-hidden-mobile">Send</span>
             </button>
-              <button
-                className={`button is-small is-info mr-2${sendState.sending ? ' is-loading' : ''}`}
-                onClick={handleSend}
-                disabled={sendState.sending}
-                title="Send digest for this window"
-              >
-                <span className="icon">
-                  <i className="fa-solid fa-envelope" />
-                </span>
-                <span className="is-hidden-mobile">Send</span>
-              </button>
-              {sendState.message ? <span className="has-text-success mr-2">{sendState.message}</span> : null}
-              {sendState.error ? <span className="has-text-danger mr-2">{sendState.error}</span> : null}
-            <div className="has-text-centered">
-              <p className="subtitle is-6 mb-0">{windowLabel}</p>
-              {weather ? (
+            {sendState.message ? <span className="has-text-success mr-2">{sendState.message}</span> : null}
+            {sendState.error ? <span className="has-text-danger mr-2">{sendState.error}</span> : null}
+            {weather ? (
+              <div className="has-text-right">
                 <p className="is-size-7 has-text-grey">
                   {weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)
                 </p>
-              ) : null}
-            </div>
-            <button
-              className="button is-small ml-2"
-              onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
-              disabled={state.loading || offsetDays >= 0}
-              title="Next day"
-            >
-              <span className="is-hidden-mobile">Next</span>
-              <span className="icon">
-                <i className="fa-solid fa-chevron-right" />
-              </span>
-            </button>
+              </div>
+            ) : null}
           </div>
         </div>
-        {!vm.sections?.length && <p className="has-text-grey">No events in this window.</p>}
+        {!vm.sections?.length && !journalEntry && <p className="has-text-grey mt-3">No events in this window.</p>}
       </div>
 
       {vm.sections?.map((section, idx) => {
