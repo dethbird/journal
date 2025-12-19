@@ -16,9 +16,11 @@ const CollectorControls = ({ onStatusChange }) => {
       setStatus({ ...data, loading: false });
       setOperation({ running: false, error: null });
       if (onStatusChange) onStatusChange(data);
+      return data;
     } catch (err) {
-      setStatus({ ...status, loading: false });
+      setStatus((s) => ({ ...s, loading: false }));
       setOperation({ running: false, error: err.message });
+      return null;
     }
   };
 
@@ -63,14 +65,16 @@ const CollectorControls = ({ onStatusChange }) => {
 
     const pollLoop = async () => {
       while (mounted) {
+        let data = null;
         try {
-          await fetchStatus();
+          data = await fetchStatus();
         } catch (e) {
-          // ignore - fetchStatus will set error state
+          // fetchStatus handles its own errors
         }
 
         // choose delay: 1s while running, otherwise 15s
-        const delay = (status && status.currentRunning) ? 1000 : 15000;
+        const isRunning = !!(data?.currentRunning);
+        const delay = isRunning ? 1000 : 15000;
         await sleep(delay);
       }
     };
@@ -79,7 +83,7 @@ const CollectorControls = ({ onStatusChange }) => {
     pollLoop();
 
     return () => { mounted = false; };
-  }, [status && status.currentRunning]);
+  }, []);
 
   const isRunning = !!status.currentRunning;
 
