@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { registerCollector } from '../registry.js';
 import prisma from '../../lib/prismaClient.js';
+import buildWeatherEnrichment from '../enrichers/weather.js';
 
 const source = 'google_timeline';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -8,8 +9,10 @@ const clientId = process.env.GOOGLE_CLIENT_ID;
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const EXPIRY_SKEW_MS = 60 * 1000;
 const FETCH_TIMEOUT_MS = 120 * 1000; // 2 minutes
-const MAX_SEGMENTS_PER_RUN = 1000; // Process up to 1000 segments per run
+const MAX_SEGMENTS_PER_RUN = Number(process.env.TIMELINE_MAX_SEGMENTS) || Infinity; // Process all segments by default
 const PROGRESS_LOG_INTERVAL = 100; // Log progress every N segments
+const BATCH_INSERT_SIZE = 500; // Insert events in batches of 500
+const WEATHER_BATCH_SIZE = 50; // Process weather enrichment in smaller batches
 
 const latestToken = (tokens = []) => {
   if (!Array.isArray(tokens) || tokens.length === 0) return null;
@@ -389,6 +392,8 @@ const collectForAccount = async (account, cursor) => {
     let skipped = 0;
     let examined = 0;
     const lastProcessedTime = cursor ? new Date(cursor) : null;
+    const itemsToInsert = [];
+    const itemsWithLocation = []; // Track items with location for weather enrichment
 
     for (const segment of parseTimelineSegments(data)) {
       examined++;
@@ -414,7 +419,13 @@ const collectForAccount = async (account, cursor) => {
 
       const item = processSegment(segment, userId);
       if (item) {
-        items.push(item);
+        itemsToInsert.push(item);
+        
+        // Track items with location for weather enrichment
+        if (item.payload?.location || item.payload?.startLocation) {
+          itemsWithLocation.push({ item, segment });
+        }
+        
         processed++;
 
         if (!maxTime || segmentTime > maxTime) {
@@ -425,7 +436,95 @@ const collectForAccount = async (account, cursor) => {
       }
     }
 
-    console.info(`[timeline] User ${userId}: finished processing ${processed} events, skipped ${skipped} segments (examined ${examined}/${totalSegments})`);
+    console.info(`[timeline] User ${userId}: finished parsing ${processed} events, skipped ${skipped} segments (examined ${examined}/${totalSegments})`);
+
+    // Bulk insert events in batches
+    let insertedCount = 0;
+    for (let i = 0; i < itemsToInsert.length; i += BATCH_INSERT_SIZE) {
+      const batch = itemsToInsert.slice(i, i + BATCH_INSERT_SIZE);
+      const batchNum = Math.floor(i / BATCH_INSERT_SIZE) + 1;
+      const totalBatches = Math.ceil(itemsToInsert.length / BATCH_INSERT_SIZE);
+      
+      console.info(`[timeline] User ${userId}: inserting batch ${batchNum}/${totalBatches} (${batch.length} events)`);
+      
+      try {
+        const result = await prisma.event.createMany({
+          data: batch,
+          skipDuplicates: true,
+        });
+        insertedCount += result.count;
+        // Don't add to items array - we're handling insert here, runner shouldn't re-insert
+      } catch (err) {
+        console.error(`[timeline] User ${userId}: batch insert failed:`, err.message);
+      }
+    }
+
+    console.info(`[timeline] User ${userId}: inserted ${insertedCount} new events (${itemsToInsert.length - insertedCount} duplicates skipped)`);
+
+    // Post-process weather enrichment for items with location
+    if (itemsWithLocation.length > 0) {
+      console.info(`[timeline] User ${userId}: post-processing weather enrichment for ${itemsWithLocation.length} location events`);
+      let enrichedCount = 0;
+      
+      for (let i = 0; i < itemsWithLocation.length; i += WEATHER_BATCH_SIZE) {
+        const batch = itemsWithLocation.slice(i, i + WEATHER_BATCH_SIZE);
+        
+        if ((i / WEATHER_BATCH_SIZE) % 5 === 0) {
+          console.info(`[timeline] User ${userId}: enriching weather batch ${Math.floor(i / WEATHER_BATCH_SIZE) + 1}/${Math.ceil(itemsWithLocation.length / WEATHER_BATCH_SIZE)}`);
+        }
+        
+        for (const { item, segment } of batch) {
+          try {
+            // Find the event in DB by externalId
+            const event = await prisma.event.findUnique({
+              where: { source_externalId: { source, externalId: item.externalId } },
+            });
+            
+            if (!event) continue;
+            
+            // Check if weather enrichment already exists
+            const existingEnrichment = await prisma.eventEnrichment.findUnique({
+              where: { eventId_enrichmentType: { eventId: event.id, enrichmentType: 'weather_v1' } },
+            });
+            
+            if (existingEnrichment) continue;
+            
+            // Build weather enrichment
+            const lat = item.payload.location?.lat ?? item.payload.startLocation?.lat;
+            const lng = item.payload.location?.lng ?? item.payload.startLocation?.lng;
+            
+            if (lat && lng) {
+              const eventForEnrichment = {
+                payload: {
+                  latitude: lat,
+                  longitude: lng,
+                  timezone: segment.timeZone ?? 'UTC',
+                },
+                occurredAt: new Date(segment.startTime),
+              };
+              
+              const enrichment = await buildWeatherEnrichment(eventForEnrichment);
+              
+              if (enrichment) {
+                await prisma.eventEnrichment.create({
+                  data: {
+                    eventId: event.id,
+                    source,
+                    enrichmentType: enrichment.enrichmentType,
+                    data: enrichment.data,
+                  },
+                });
+                enrichedCount++;
+              }
+            }
+          } catch (err) {
+            console.warn(`[timeline] Weather enrichment failed for event ${item.externalId}:`, err.message);
+          }
+        }
+      }
+      
+      console.info(`[timeline] User ${userId}: created ${enrichedCount} weather enrichments`);
+    }
 
     // Update lastSyncedAt
     await prisma.googleTimelineSettings.update({
