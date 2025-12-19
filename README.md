@@ -1,3 +1,153 @@
+<!-- Project README rewritten to include requirements, dev setup, user setup, and philosophy -->
+
+# Evidence Journal
+
+![Node >=18](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
+![Postgres](https://img.shields.io/badge/postgres-%3E%3D12-blue)
+![Prisma](https://img.shields.io/badge/prisma-enabled-4f46e5)
+![Vite](https://img.shields.io/badge/vite-built-yellowgreen)
+
+Lightweight personal journal, timeline ingestors, and daily digest renderer. Stores a journal entry per day (content + frontmatter metadata) and supports collectors (Google Drive timeline JSON, IMAP email ingest, Spotify/github sources).
+
+## Requirements
+
+- Node.js >= 18
+- npm or yarn
+- PostgreSQL (local or remote)
+- Account credentials for integrations you plan to use:
+   - IMAP/SMTP (email ingest)
+   - Google OAuth credentials (Drive access) or service account with Drive API access
+
+## Quick Start — Development
+
+1. Clone and install
+
+```bash
+git clone <repo-url>
+cd journal
+npm install
+```
+
+2. Create and configure the database
+
+- Ensure PostgreSQL is running and create a database for the app (example: `journal_dev`).
+- Set `DATABASE_URL` in your environment or an `.env` file (see sample below).
+
+3. Prisma schema -> push & generate client
+
+We use `prisma db push` during development to sync schema without running migrations by default. Run:
+
+```bash
+npx prisma db push
+npx prisma generate
+```
+
+If you prefer migrations instead:
+
+```bash
+npx prisma migrate dev --name init
+```
+
+4. Environment configuration
+
+Create a `.env` at the project root with the values needed by the app. Example variables the code expects:
+
+```
+DATABASE_URL=postgresql://user:pass@localhost:5432/journal_dev
+SESSION_SECRET=replace-with-random-string
+
+# Google OAuth (for Drive timeline ingest)
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...  # optional if using a long-lived token
+
+# IMAP (email ingest)
+IMAP_HOST=imap.example.com
+IMAP_PORT=993
+IMAP_USER=you@example.com
+IMAP_PASS=...
+
+# SMTP (optional, for sending email)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=you@example.com
+SMTP_PASS=...
+
+# Other
+PORT=4001
+```
+
+Note: Some integration settings (e.g. Drive folder id, timeline filename, collector toggles) are stored in the application's settings UI or in account-specific settings; see the web app for per-account configuration.
+
+5. Build and run the UI and server
+
+```bash
+# build the frontend
+npm run ui:build
+
+# start the web server (API + collectors as configured)
+npm run web:start
+# OR run directly for development
+node src/web/server.js
+```
+
+6. Running collectors
+
+- Collector code lives under `src/collector`. There are multiple sources (`timeline`, `email`, `github`, `spotify`). You can run collectors manually with Node for testing (example):
+
+```bash
+# run a collector runner (depends on local scripts)
+node src/collector/run.js
+```
+
+Adjust commands to match scripts in `package.json` (e.g. `npm run collector` if present).
+
+## User Setup (Integration details)
+
+- IMAP/SMTP
+   - Provide IMAP host/port/user/pass in environment or account settings.
+   - Configure the email ingest source to mark messages as processed (MOVE/DELETE/MARK_SEEN) according to your preference.
+
+- Google Drive (Timeline JSON)
+   - The timeline collector looks for the most recent file with a configured filename (default `Timeline.json`) inside a selected Drive folder.
+   - Provide OAuth credentials (client id/secret) and a refresh token or service account credentials with Drive access.
+   - Use the UI Picker (in the web app) to select the Drive folder — the app will store the folder id in account settings.
+
+- Timeline filename
+   - Default filename is `Timeline.json`. The UI/account settings allow changing that filename per account.
+
+## Database Notes
+
+- Schema: Prisma schema is located in `prisma/schema.prisma`. Daily journal entries are stored in `JournalEntry` (content, optional `goals`, timestamps).
+- Frontmatter: `mood`, `energy`, and `tags` are stored in the markdown frontmatter of the `content` column; `goals` is a separate column (markdown string).
+
+## Development Tips
+
+- Auto-save: The journal editor auto-saves content (debounced) and saves `goals` as well — useful when testing editor behavior.
+- When changing Prisma schema, run `npx prisma db push` then `npx prisma generate` to refresh the client.
+- If the UI build fails during development, fix the component errors and re-run `npm run ui:build`. The app uses Vite for fast builds.
+
+## Philosophy
+
+This project favors minimal, composable components and simple data models. The journal content is the source of truth: structured metadata (mood/energy/tags) is kept in a small frontmatter block inside the markdown so entries remain portable, while day-specific fields that are more UI-oriented (like `goals`) are stored as dedicated columns for fast access in digests and lists.
+
+Collectors are designed to be simple, resilient sync processes: prefer idempotence, process safety (marking messages or files after ingest), and small retries rather than complex state machines.
+
+The UI is intentionally lightweight — a focused experience for quickly writing and reviewing entries, with progressive enhancement for collectors and integrations.
+
+## Contributing
+
+1. Fork, create a branch, and open a pull request with a clear description of your changes.
+2. Run the test/build sequence locally before opening the PR.
+
+## License
+
+See the `LICENSE` file in the repository.
+
+---
+
+If you'd like, I can also add a small `.env.example` file showing the variables above, or update the `package.json` scripts section with helpful developer aliases. Review this README and tell me any detail you'd like adjusted or expanded.
+
 # Evidence Journal
 
 A Fastify API + React UI monolith that collects personal activity events, stores them in Postgres via Prisma, and can produce digest-friendly data while also serving a SPA frontend.
