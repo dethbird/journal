@@ -49,6 +49,7 @@ export const buildGithubSection = (events) => {
           .map((c) => ({
             short: c.short_sha ?? (c.sha ? c.sha.slice(0, 7) : null),
             message: c.message ?? null,
+            date: c.date ?? null,
             url: c.url ?? c.html_url ?? null,
           }))
           .filter((c) => c.message)
@@ -56,11 +57,17 @@ export const buildGithubSection = (events) => {
 
     const key = `${repo}::${branch ?? ''}`;
     if (!groups.has(key)) {
-      groups.set(key, { repo, branch, commits: 0, subjects: [], commitDetails: new Map() });
+      groups.set(key, { repo, branch, commits: 0, subjects: [], commitDetails: new Map(), latestEventTime: null });
     }
 
     const entry = groups.get(key);
     entry.commits += commitCount || 1;
+    
+    // Track the most recent event time for this repo/branch
+    const eventTime = evt.occurredAt ? new Date(evt.occurredAt).getTime() : 0;
+    if (!entry.latestEventTime || eventTime > entry.latestEventTime) {
+      entry.latestEventTime = eventTime;
+    }
 
     if (entry.subjects.length < MAX_SUBJECTS) {
       entry.subjects = [...entry.subjects, ...subjects].slice(0, MAX_SUBJECTS);
@@ -78,6 +85,7 @@ export const buildGithubSection = (events) => {
   const stats = { commits: 0, repos: new Set() };
 
   if (groups.size > 0) {
+    // Sort by commit count (most first), then by repo name
     const sorted = [...groups.values()].sort((a, b) => b.commits - a.commits || a.repo.localeCompare(b.repo));
     const top = sorted.slice(0, MAX_REPOS_DISPLAY);
       for (const group of top) {
@@ -86,10 +94,19 @@ export const buildGithubSection = (events) => {
         stats.repos.add(group.repo);
       }
 
-      const commitDetails = [...group.commitDetails.values()].slice(0, MAX_COMMIT_LINES);
+      // Sort commits within this group by date (newest first)
+      const allCommitDetails = [...group.commitDetails.values()]
+        .sort((a, b) => {
+          if (!a.date && !b.date) return 0;
+          if (!a.date) return 1;
+          if (!b.date) return -1;
+          return new Date(b.date).getTime() - new Date(a.date).getTime();
+        });
+      
+      const commitDetails = allCommitDetails.slice(0, MAX_COMMIT_LINES);
         const commitList = commitDetails.length
-          ? commitDetails.map((detail) => ({ short: detail.short, message: detail.message, url: detail.url }))
-          : group.subjects.map((subject) => ({ short: null, message: subject, url: null }));
+          ? commitDetails.map((detail) => ({ short: detail.short, message: detail.message, date: detail.date, url: detail.url }))
+          : group.subjects.map((subject) => ({ short: null, message: subject, date: null, url: null }));
         // derive a repo URL when we can (repo is owner/name)
         const repoUrl = group.repo && group.repo.includes('/') ? `https://github.com/${group.repo}` : null;
 

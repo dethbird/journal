@@ -83,6 +83,7 @@ const buildPush = async (event, octokit) => {
         short_sha: c.sha ? c.sha.slice(0, 7) : null,
         message: c.commit?.message?.split('\n')[0] || null,
         author: c.commit?.author?.name ?? c.author?.login ?? null,
+        date: c.commit?.author?.date ?? null,
         url: c.html_url ?? null,
       }));
 
@@ -121,6 +122,7 @@ const buildPush = async (event, octokit) => {
         short_sha: commit.data?.sha ? commit.data.sha.slice(0, 7) : null,
         message: subject,
         author: commit.data?.commit?.author?.name ?? commit.data?.author?.login ?? null,
+        date: commit.data?.commit?.author?.date ?? null,
         url: commit.data?.html_url ?? null,
       };
       return {

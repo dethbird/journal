@@ -15,6 +15,12 @@ body {
   color: #4b5563;
 }
 
+/* Align hero content to the top to prevent header shifting when content is short */
+.hero.is-fullheight .hero-body {
+  align-items: flex-start;
+  padding-top: 1.5rem;
+}
+
 .box {
   border: 1px solid #e2e8f0;
   box-shadow: none;
@@ -72,5 +78,34 @@ ul {
 /* small utility gap class used in Settings */
 .gap-half {
   gap: 0.5rem;
+}
+
+/* Journal entry styling */
+.journal-entry {
+  background: #fefcf9;
+  border-left: 3px solid #e8b963;
+  padding: 1rem 1.25rem;
+  border-radius: 4px;
+  font-family: Georgia, 'Times New Roman', serif;
+  line-height: 1.7;
+  color: #2d2d2d;
+}
+
+.journal-entry p:last-child {
+  margin-bottom: 0;
+}
+
+.journal-entry h1,
+.journal-entry h2,
+.journal-entry h3 {
+  font-family: inherit;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.journal-entry h1:first-child,
+.journal-entry h2:first-child,
+.journal-entry h3:first-child {
+  margin-top: 0;
 }
 

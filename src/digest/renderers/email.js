@@ -16,7 +16,8 @@ const renderGithub = (section) => {
       const details = (p.details ?? [])
         .map((d) => {
           const short = d.url ? `<a href="${escapeHtml(d.url)}">${escapeHtml(d.short || '')}</a>` : (d.short ? `<strong>(${escapeHtml(d.short)})</strong>` : '');
-          return `<div class="detail">${short ? `${short} ` : ''}${escapeHtml(d.message ?? '')}</div>`;
+          const timestamp = d.date ? ` <span class="muted">· ${new Date(d.date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>` : '';
+          return `<div class="detail">${short ? `${short} ` : ''}${escapeHtml(d.message ?? '')}${timestamp}</div>`;
         })
         .join('');
       return `<div class="card"><div class="title">${repoTitle}${branch}</div><div class="meta">${p.commits} commit${p.commits === 1 ? '' : 's'}</div>${details}</div>`;

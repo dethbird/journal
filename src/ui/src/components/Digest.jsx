@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { marked } from 'marked';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -86,8 +87,8 @@ const GithubSection = ({ section }) => {
               {push.branch ? <span className="has-text-grey">({push.branch})</span> : null}
             </p>
             <p className="is-size-7 has-text-grey">{push.commits} commit{push.commits === 1 ? '' : 's'}</p>
-            {push.details?.map((detail, idx) => (
-              <p key={idx} className="is-size-7">
+            {(push.details ?? []).map((detail, idx) => (
+              <p key={detail.sha || detail.url || idx} className="is-size-7">
                 {detail.url ? (
                   <a className="has-text-grey" href={detail.url} target="_blank" rel="noreferrer">{detail.short || detail.message}</a>
                 ) : (
@@ -95,6 +96,9 @@ const GithubSection = ({ section }) => {
                 )}
                 {detail.short ? ' ' : null}
                 {detail.message}
+                {detail.date ? (
+                  <span className="has-text-grey is-size-7"> · {new Date(detail.date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
+                ) : null}
               </p>
             ))}
           </div>
@@ -287,8 +291,13 @@ const JournalSection = ({ entry }) => {
           <span>Edit</span>
         </a>
       </div>
+      {body ? (
+        <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(body) }} />
+      ) : (
+        <p className="has-text-grey">No journal content</p>
+      )}
       {(frontmatter.mood || frontmatter.energy || tags.length > 0) && (
-        <div className="mb-3">
+        <div className="mt-3">
           {frontmatter.mood && (
             <span className="tag is-info is-light mr-2">Mood: {frontmatter.mood}</span>
           )}
@@ -299,11 +308,6 @@ const JournalSection = ({ entry }) => {
             <span key={tag} className="tag is-light mr-1">{tag}</span>
           ))}
         </div>
-      )}
-      {body ? (
-        <div className="content" style={{ whiteSpace: 'pre-wrap' }}>{body}</div>
-      ) : (
-        <p className="has-text-grey">No journal content</p>
       )}
     </div>
   );

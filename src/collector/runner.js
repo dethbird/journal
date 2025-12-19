@@ -1,5 +1,7 @@
 import prisma from '../lib/prismaClient.js';
 import { listCollectors } from './registry.js';
+import { Octokit } from '@octokit/rest';
+import { buildGithubEnrichment } from './enrichers/github.js';
 
 const normalizeOccurrence = (value) => {
   if (!value) {
@@ -13,6 +15,10 @@ const normalizeOccurrence = (value) => {
 
   return parsed;
 };
+
+// Re-enrich window: events within this many days can have enrichments refreshed
+const RE_ENRICH_WINDOW_DAYS = 7;
+const RE_ENRICH_MAX_PER_ACCOUNT = 50;
 
 const insertEvent = async (source, item) => {
   const occurredAt = normalizeOccurrence(item.occurredAt);
@@ -28,10 +34,21 @@ const insertEvent = async (source, item) => {
 
   try {
     const created = await prisma.event.create({ data: record });
-    return created;
+    return { event: created, isNew: true };
   } catch (error) {
     if (error.code === 'P2002') {
-      return null;
+      // Event already exists - fetch it and check if it's recent enough to re-enrich
+      const existing = await prisma.event.findFirst({
+        where: { source, externalId: item.externalId, userId: item.userId },
+      });
+      
+      if (!existing) return { event: null, isNew: false };
+      
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - RE_ENRICH_WINDOW_DAYS);
+      const isRecent = existing.occurredAt >= cutoff;
+      
+      return { event: existing, isNew: false, isRecent };
     }
     throw error;
   }
@@ -69,15 +86,18 @@ export const runCollectorCycle = async () => {
         const { items = [], nextCursor = null } = await collectForAccount(account, sinceCursor);
 
         for (const item of items) {
-          const createdEvent = await insertEvent(source, item);
-          if (createdEvent) {
-            totalStored += 1;
+          const result = await insertEvent(source, item);
+          if (result.event) {
+            if (result.isNew) totalStored += 1;
 
-            if (item.enrichment) {
+            // Enrich new events, or re-enrich recent GitHub push events
+            const shouldEnrich = result.isNew || (result.isRecent && source === 'github' && item.eventType === 'PushEvent');
+            
+            if (shouldEnrich && item.enrichment) {
               await prisma.eventEnrichment.upsert({
-                where: { eventId_enrichmentType: { eventId: createdEvent.id, enrichmentType: item.enrichment.enrichmentType } },
+                where: { eventId_enrichmentType: { eventId: result.event.id, enrichmentType: item.enrichment.enrichmentType } },
                 update: { data: item.enrichment.data, source },
-                create: { eventId: createdEvent.id, source, enrichmentType: item.enrichment.enrichmentType, data: item.enrichment.data },
+                create: { eventId: result.event.id, source, enrichmentType: item.enrichment.enrichmentType, data: item.enrichment.data },
               });
             }
           }
@@ -86,6 +106,51 @@ export const runCollectorCycle = async () => {
         // Update cursor for this account
         if (nextCursor && nextCursor !== cursorRecord.cursor) {
           await prisma.cursor.update({ where: { id: cursorRecord.id }, data: { cursor: nextCursor } });
+        }
+
+        // Post-collection: re-enrich recent GitHub PushEvents for this account
+        try {
+          if (source === 'github') {
+            const token = account.oauthTokens?.[0]?.accessToken;
+            if (token) {
+              console.log('[collector] starting re-enrich for github account', account.id);
+              const octokit = new Octokit({ auth: token });
+              const cutoff = new Date();
+              cutoff.setDate(cutoff.getDate() - RE_ENRICH_WINDOW_DAYS);
+              const recentEvents = await prisma.event.findMany({
+                where: { source: 'github', eventType: 'PushEvent', userId: account.userId, occurredAt: { gte: cutoff } },
+                orderBy: { occurredAt: 'desc' },
+                take: RE_ENRICH_MAX_PER_ACCOUNT,
+              });
+
+              let reEnriched = 0;
+              for (const dbEvent of recentEvents) {
+                // construct a minimal event shape expected by the enricher
+                const evt = {
+                  id: dbEvent.externalId,
+                  type: dbEvent.eventType,
+                  repo: dbEvent.payload?.repo ?? null,
+                  payload: dbEvent.payload ?? {},
+                  created_at: dbEvent.occurredAt,
+                };
+
+                const enrichment = await buildGithubEnrichment(evt, octokit);
+                if (enrichment && enrichment.enrichmentType && enrichment.data) {
+                  await prisma.eventEnrichment.upsert({
+                    where: { eventId_enrichmentType: { eventId: dbEvent.id, enrichmentType: enrichment.enrichmentType } },
+                    update: { data: enrichment.data, source },
+                    create: { eventId: dbEvent.id, source, enrichmentType: enrichment.enrichmentType, data: enrichment.data },
+                  });
+                  reEnriched += 1;
+                }
+              }
+              console.log('[collector] re-enriched', reEnriched, 'events for account', account.id);
+            } else {
+              console.log('[collector] github account has no oauth token, skipping re-enrich', account.id);
+            }
+          }
+        } catch (err) {
+          console.warn('[collector] re-enrich github failed for account', account.id, err?.message || err);
         }
       }
 
@@ -101,15 +166,18 @@ export const runCollectorCycle = async () => {
     let stored = 0;
     if (Array.isArray(items)) {
       for (const item of items) {
-        const createdEvent = await insertEvent(source, item);
-        if (createdEvent) {
-          stored += 1;
+        const result = await insertEvent(source, item);
+        if (result.event) {
+          if (result.isNew) stored += 1;
 
-          if (item.enrichment) {
+          // Enrich new events, or re-enrich recent GitHub push events
+          const shouldEnrich = result.isNew || (result.isRecent && source === 'github' && item.eventType === 'PushEvent');
+          
+          if (shouldEnrich && item.enrichment) {
             await prisma.eventEnrichment.upsert({
-              where: { eventId_enrichmentType: { eventId: createdEvent.id, enrichmentType: item.enrichment.enrichmentType } },
+              where: { eventId_enrichmentType: { eventId: result.event.id, enrichmentType: item.enrichment.enrichmentType } },
               update: { data: item.enrichment.data, source },
-              create: { eventId: createdEvent.id, source, enrichmentType: item.enrichment.enrichmentType, data: item.enrichment.data },
+              create: { eventId: result.event.id, source, enrichmentType: item.enrichment.enrichmentType, data: item.enrichment.data },
             });
           }
         }
