@@ -180,7 +180,7 @@ const serializeEmailBookmarkSettings = (settings) => {
 const serializeGoogleTimelineSettings = (settings) => {
   if (!settings) return null;
   return {
-    driveFileId: settings.driveFileId || null,
+    driveFolderId: settings.driveFolderId || null,
     driveFileName: settings.driveFileName || 'Timeline.json',
     enabled: settings.enabled,
     lastSyncedAt: settings.lastSyncedAt,
@@ -1174,7 +1174,7 @@ app.get('/api/google-timeline/settings', async (request, reply) => {
     return reply.status(400).send({ error: 'Google is not connected' });
   }
 
-  const settings = serializeGoogleTimelineSettings(account.googleTimelineSettings) || { driveFileId: null, driveFileName: 'Timeline.json' };
+  const settings = serializeGoogleTimelineSettings(account.googleTimelineSettings) || { driveFolderId: null, driveFileName: 'Timeline.json' };
   return { settings };
 });
 
@@ -1182,9 +1182,9 @@ app.post('/api/google-timeline/settings', async (request, reply) => {
   const user = await getSessionUser(request);
   if (!user) return reply.status(401).send({ error: 'Not authenticated' });
 
-  const { driveFileId, driveFileName } = request.body || {};
-  if (!driveFileId) {
-    return reply.status(400).send({ error: 'driveFileId is required (use Google Picker to select a file)' });
+  const { driveFolderId, driveFileName } = request.body || {};
+  if (!driveFolderId) {
+    return reply.status(400).send({ error: 'driveFolderId is required (use Google Picker to select a folder)' });
   }
 
   const account = await prisma.connectedAccount.findFirst({
@@ -1198,8 +1198,8 @@ app.post('/api/google-timeline/settings', async (request, reply) => {
 
   const settings = await prisma.googleTimelineSettings.upsert({
     where: { connectedAccountId: account.id },
-    update: { driveFileId, driveFileName: driveFileName || 'Timeline.json' },
-    create: { connectedAccountId: account.id, driveFileId, driveFileName: driveFileName || 'Timeline.json' },
+    update: { driveFolderId, driveFileName: driveFileName || 'Timeline.json' },
+    create: { connectedAccountId: account.id, driveFolderId, driveFileName: driveFileName || 'Timeline.json' },
   });
 
   return { settings: serializeGoogleTimelineSettings(settings) };

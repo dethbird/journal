@@ -339,6 +339,34 @@ const processSegment = async (segment, userId) => {
 };
 
 /**
+ * Search for files in a Google Drive folder by name, returns most recent file
+ */
+const findMostRecentFile = async (folderId, fileName, accessToken) => {
+  // Escape single quotes in fileName for Drive API query
+  const escapedName = fileName.replace(/'/g, "\\'");
+  const query = `name='${escapedName}' and '${folderId}' in parents and trashed=false`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&orderBy=modifiedTime desc&pageSize=1&fields=files(id,name,modifiedTime)`;
+  
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Drive API search error (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  const files = data.files || [];
+  
+  if (files.length === 0) {
+    throw new Error(`No file named '${fileName}' found in folder ${folderId}`);
+  }
+
+  return files[0]; // Most recent file due to orderBy
+};
+
+/**
  * Fetch file content from Google Drive using access token with timeout
  */
 const fetchDriveFile = async (fileId, accessToken) => {
@@ -384,8 +412,8 @@ const collectForAccount = async (account, cursor) => {
   const userId = account.userId;
   const settings = account.googleTimelineSettings;
 
-  if (!settings?.driveFileId) {
-    console.warn(`[timeline] No driveFileId configured for user ${userId}, skipping`);
+  if (!settings?.driveFolderId) {
+    console.warn(`[timeline] No driveFolderId configured for user ${userId}, skipping`);
     return { items: [], nextCursor: cursor };
   }
 
@@ -396,7 +424,8 @@ const collectForAccount = async (account, cursor) => {
     return { items: [], nextCursor: cursor };
   }
 
-  console.info(`[timeline] Fetching Timeline.json (${settings.driveFileName || settings.driveFileId}) for user ${userId}`);
+  const fileName = settings.driveFileName || 'Timeline.json';
+  console.info(`[timeline] Searching for '${fileName}' in folder ${settings.driveFolderId} for user ${userId}`);
   console.info(`[timeline] Current cursor: ${cursor || 'none (will process all segments)'}`);
 
   const items = [];
@@ -406,8 +435,15 @@ const collectForAccount = async (account, cursor) => {
 
   try {
     let data;
+    let fileInfo;
+    
     try {
-      data = await fetchDriveFile(settings.driveFileId, accessTokenInUse);
+      // Search for the most recent file with the specified name in the folder
+      fileInfo = await findMostRecentFile(settings.driveFolderId, fileName, accessTokenInUse);
+      console.info(`[timeline] Found file: ${fileInfo.name} (${fileInfo.id}), modified: ${fileInfo.modifiedTime}`);
+      
+      // Fetch the file content
+      data = await fetchDriveFile(fileInfo.id, accessTokenInUse);
     } catch (err) {
       // Retry once with token refresh if we get a 401
       if (err.message.includes('401') && tokenRecord?.refreshToken && !refreshAttempted) {
@@ -416,7 +452,9 @@ const collectForAccount = async (account, cursor) => {
         const refreshed = await refreshAccessToken(account, tokenRecord.refreshToken);
         if (refreshed?.accessToken) {
           accessTokenInUse = refreshed.accessToken;
-          data = await fetchDriveFile(settings.driveFileId, accessTokenInUse);
+          fileInfo = await findMostRecentFile(settings.driveFolderId, fileName, accessTokenInUse);
+          console.info(`[timeline] Found file: ${fileInfo.name} (${fileInfo.id}), modified: ${fileInfo.modifiedTime}`);
+          data = await fetchDriveFile(fileInfo.id, accessTokenInUse);
         } else {
           throw err;
         }

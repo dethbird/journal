@@ -32,7 +32,7 @@ const main = async () => {
       const settings = cursor.connectedAccount?.googleTimelineSettings;
       
       console.log(`User: ${user?.displayName || user?.email || 'Unknown'} (${user?.id})`);
-      console.log(`  File ID: ${settings?.driveFileId || 'Not set'}`);
+      console.log(`  Folder ID: ${settings?.driveFolderId || 'Not set'}`);
       console.log(`  File Name: ${settings?.driveFileName || 'Timeline.json'}`);
       console.log(`  Last Synced: ${settings?.lastSyncedAt ? new Date(settings.lastSyncedAt).toLocaleString() : 'Never'}`);
       console.log(`  Cursor: ${cursor.cursor || 'None (will process all segments)'}`);

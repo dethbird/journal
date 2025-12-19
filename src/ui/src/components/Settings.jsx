@@ -360,7 +360,8 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
     loading: true,
     saving: false,
     picking: false,
-    driveFileId: null,
+    driveFolderId: null,
+    folderName: null,
     driveFileName: 'Timeline.json',
     message: null,
     error: null,
@@ -381,7 +382,7 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
         const data = await res.json();
         setState((prev) => ({
           ...prev,
-          driveFileId: data.settings?.driveFileId || null,
+          driveFolderId: data.settings?.driveFolderId || null,
           driveFileName: data.settings?.driveFileName || 'Timeline.json',
           loading: false,
           error: null,
@@ -425,11 +426,11 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
         document.body.appendChild(script);
       });
 
-      // Create and show picker
+      // Create and show picker for folder selection
       const view = new window.google.picker.DocsView()
         .setIncludeFolders(true)
-        .setSelectFolderEnabled(false)
-        .setMimeTypes('application/json');
+        .setSelectFolderEnabled(true)
+        .setMimeTypes('application/vnd.google-apps.folder');
 
       const picker = new window.google.picker.PickerBuilder()
         .setAppId(googleClientId.split('-')[0]) // App ID is before the dash in client ID
@@ -440,8 +441,8 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
             const doc = data.docs[0];
             setState((prev) => ({
               ...prev,
-              driveFileId: doc.id,
-              driveFileName: doc.name,
+              driveFolderId: doc.id,
+              folderName: doc.name,
               picking: false,
             }));
           } else if (data.action === window.google.picker.Action.CANCEL) {
@@ -457,8 +458,8 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
   };
 
   const handleSave = async () => {
-    if (!state.driveFileId) {
-      setState((prev) => ({ ...prev, error: 'Please select a file first' }));
+    if (!state.driveFolderId) {
+      setState((prev) => ({ ...prev, error: 'Please select a folder first' }));
       return;
     }
 
@@ -468,7 +469,7 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ driveFileId: state.driveFileId, driveFileName: state.driveFileName }),
+        body: JSON.stringify({ driveFolderId: state.driveFolderId, driveFileName: state.driveFileName }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -479,7 +480,7 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
         ...prev,
         saving: false,
         message: 'Saved',
-        driveFileId: data.settings?.driveFileId || prev.driveFileId,
+        driveFolderId: data.settings?.driveFolderId || prev.driveFolderId,
         driveFileName: data.settings?.driveFileName || prev.driveFileName,
       }));
       setTimeout(() => setState((prev) => ({ ...prev, message: null })), 2500);
@@ -496,11 +497,11 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
       {!connected && <p className="help is-danger mt-2">Connect Google to edit these settings.</p>}
       <div className="mt-3">
         <div className="field">
-          <label className="label">Timeline file in Google Drive</label>
+          <label className="label">Google Drive folder</label>
           <div className="control">
             <div className="is-flex is-align-items-center gap-half">
-              <span className={state.driveFileId ? 'tag is-success is-medium' : 'tag is-warning is-medium'}>
-                {state.driveFileId ? state.driveFileName : 'No file selected'}
+              <span className={state.driveFolderId ? 'tag is-success is-medium' : 'tag is-warning is-medium'}>
+                {state.driveFolderId ? (state.folderName || 'Folder selected') : 'No folder selected'}
               </span>
               <button
                 type="button"
@@ -514,10 +515,24 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
                 <span>Choose from Drive</span>
               </button>
             </div>
-            {state.driveFileId && (
-              <p className="help has-text-grey">File ID: {state.driveFileId}</p>
+            {state.driveFolderId && (
+              <p className="help has-text-grey">Folder ID: {state.driveFolderId}</p>
             )}
           </div>
+        </div>
+        <div className="field mt-3">
+          <label className="label">Timeline filename</label>
+          <div className="control">
+            <input
+              type="text"
+              className="input"
+              value={state.driveFileName}
+              onChange={(e) => setState((prev) => ({ ...prev, driveFileName: e.target.value }))}
+              placeholder="Timeline.json"
+              disabled={!connected}
+            />
+          </div>
+          <p className="help">The collector will search for the most recent file with this name in the selected folder.</p>
         </div>
         <div className="field is-grouped mt-4">
           <div className="control">
@@ -525,7 +540,7 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
               type="button"
               className={`button is-primary${state.saving ? ' is-loading' : ''}`}
               onClick={handleSave}
-              disabled={!connected || !state.driveFileId}
+              disabled={!connected || !state.driveFolderId}
             >
               Save
             </button>

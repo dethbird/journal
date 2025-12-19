@@ -71,7 +71,7 @@ export const runCollectorCycle = async () => {
     if (typeof collectForAccount === 'function') {
       // Special case: google_timeline uses google provider accounts with timeline settings
       const accountQuery = source === 'google_timeline'
-        ? { provider: 'google', status: 'active', googleTimelineSettings: { driveFileId: { not: null } } }
+        ? { provider: 'google', status: 'active', googleTimelineSettings: { driveFolderId: { not: null } } }
         : { provider: source, status: 'active' };
       const accounts = await prisma.connectedAccount.findMany({ where: accountQuery, include: { oauthTokens: true, emailBookmarkSettings: true, googleTimelineSettings: true } });
 
