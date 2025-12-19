@@ -57,14 +57,29 @@ const CollectorControls = ({ onStatusChange }) => {
   };
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(() => {
-      if (status.currentRunning) {
-        fetchStatus();
+    let mounted = true;
+
+    const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+    const pollLoop = async () => {
+      while (mounted) {
+        try {
+          await fetchStatus();
+        } catch (e) {
+          // ignore - fetchStatus will set error state
+        }
+
+        // choose delay: 1s while running, otherwise 15s
+        const delay = (status && status.currentRunning) ? 1000 : 15000;
+        await sleep(delay);
       }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [status.currentRunning]);
+    };
+
+    // start loop
+    pollLoop();
+
+    return () => { mounted = false; };
+  }, [status && status.currentRunning]);
 
   const isRunning = !!status.currentRunning;
 
