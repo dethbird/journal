@@ -6,6 +6,7 @@
 ![Postgres](https://img.shields.io/badge/postgres-%3E%3D12-blue)
 ![Prisma](https://img.shields.io/badge/prisma-enabled-4f46e5)
 ![Vite](https://img.shields.io/badge/vite-built-yellowgreen)
+![PM2](https://img.shields.io/badge/pm2-managed-2ea44f)
 
 Lightweight personal journal, timeline ingestors, and daily digest renderer. Stores a journal entry per day (content + frontmatter metadata) and supports collectors (Google Drive timeline JSON, IMAP email ingest, Spotify/github sources).
 
@@ -14,6 +15,7 @@ Lightweight personal journal, timeline ingestors, and daily digest renderer. Sto
 - Node.js >= 18
 - npm or yarn
 - PostgreSQL (local or remote)
+ - PM2 (optional, recommended for production process management)
 - Account credentials for integrations you plan to use:
    - IMAP/SMTP (email ingest)
    - Google OAuth credentials (Drive access) or service account with Drive API access
@@ -61,29 +63,15 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REFRESH_TOKEN=...  # optional if using a long-lived token
 
-# IMAP (email ingest)
+# IMAP (email ingest - can also be configured per-user in Settings UI)
 IMAP_HOST=imap.example.com
 IMAP_PORT=993
 IMAP_USER=you@example.com
 IMAP_PASS=...
 
-# SMTP (optional, for sending email)
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=you@example.com
-SMTP_PASS=...
-
 # Other
 PORT=4001
-
-# Digest email (for scheduled daily email)
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_SECURE=false  # true for port 465
-SMTP_USER=you@example.com
-SMTP_PASS=...
-SMTP_FROM=you@example.com
-DIGEST_EMAIL_TO=you@example.com
+DIGEST_RANGE_HOURS=24
 ```
 
 Note: Some integration settings (e.g. Drive folder id, timeline filename, collector toggles) are stored in the application's settings UI or in account-specific settings; see the web app for per-account configuration.
@@ -113,19 +101,21 @@ node src/collector/run.js
 
 ### PM2 setup (VM or VPS)
 
-If you'll use `pm2` to keep the server running, follow these steps on your VM/VPS:
+PM2 is optional but recommended for keeping the server running in production. This project includes an `ecosystem.config.cjs` config file and npm helper scripts.
 
-1. Install pm2 globally:
+1. Install pm2 globally on your VPS:
 
 ```bash
 sudo npm install -g pm2
 ```
 
-2. From the project root, build the UI and start the process with pm2:
+2. From the project root, build the UI and start the process with pm2 (or use the npm helper):
 
 ```bash
 npm run ui:build
-pm2 start ecosystem.config.js --env production
+pm2 start ecosystem.config.cjs --env production
+# or using the included npm script
+npm run pm2:start
 pm2 save
 ```
 
@@ -136,17 +126,17 @@ pm2 startup systemd
 # run the command pm2 prints (sudo) to enable startup
 ```
 
-4. Useful pm2 commands:
+4. Useful pm2 commands (npm scripts provided):
 
 ```bash
-pm2 status
-pm2 logs evidence-journal
-pm2 restart evidence-journal
-pm2 stop evidence-journal
-pm2 delete evidence-journal
+npm run pm2:status    # pm2 status
+npm run pm2:logs      # pm2 logs evidence-journal
+npm run pm2:restart   # pm2 reload ecosystem.config.cjs --env production
+npm run pm2:stop      # pm2 stop ecosystem.config.cjs --env production
+npm run pm2:delete    # pm2 delete evidence-journal
 ```
 
-Note: `ecosystem.config.js` is included in the repo; edit it to set `cwd` or adjust logging paths for your environment.
+Note: `ecosystem.config.cjs` is included in the repo; edit it to set `cwd` or adjust logging paths for your environment.
 For production use, set up automated scheduling:
 
 ### Collector (every 30 minutes)
@@ -208,15 +198,11 @@ sudo nano /etc/systemd/system/journal-digest.service
 # Update User=YOUR_USER and WorkingDirectory=/path/to/journal
 ```
 
-3. Add SMTP credentials to your `.env`:
-
-```
-SMTP_HOST=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=you@example.com
-SMTP_PASS=your-password
-DIGEST_EMAIL_TO=you@example.com
-```
+3. Configure email delivery for each user in the web app:
+   - Open the web UI (http://localhost:4001)
+   - Go to Settings > Email delivery
+   - Enable email delivery and enter SMTP credentials (host, port, username, password)
+   - Set the "From" email and optional reply-to address
 
 4. Enable and start the timer:
 

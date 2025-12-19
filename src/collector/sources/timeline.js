@@ -385,7 +385,52 @@ const fetchDriveFile = async (fileId, accessToken) => {
       const text = await res.text().catch(() => '');
       throw new Error(`Drive API error (${res.status}): ${text}`);
     }
-    return res.json();
+    
+    // Get raw text first for defensive parsing
+    const text = await res.text();
+    
+    try {
+      // Try standard JSON parse
+      return JSON.parse(text);
+    } catch (jsonErr) {
+      // If standard parse fails, try to extract valid JSON
+      console.warn(`[timeline] JSON parse failed, attempting to extract valid JSON from file ${fileId}`);
+      
+      // Try to find the first valid JSON object by looking for the main structure
+      const match = text.match(/\{[\s\S]*"semanticSegments"\s*:\s*\[[\s\S]*?\]\s*\}/);
+      if (match) {
+        try {
+          return JSON.parse(match[0]);
+        } catch (retryErr) {
+          console.error(`[timeline] Failed to parse extracted JSON:`, retryErr.message);
+        }
+      }
+      
+      // Last resort: try to parse just up to the error position if we have it
+      if (jsonErr.message.includes('position')) {
+        const posMatch = jsonErr.message.match(/position (\d+)/);
+        if (posMatch) {
+          const errorPos = parseInt(posMatch[1], 10);
+          console.warn(`[timeline] Attempting to parse JSON up to error position ${errorPos}`);
+          
+          // Try to find a valid closing point before the error
+          let truncated = text.substring(0, errorPos);
+          // Find the last complete object/array closing before the error
+          const lastBrace = truncated.lastIndexOf('}');
+          if (lastBrace > 0) {
+            truncated = truncated.substring(0, lastBrace + 1);
+            try {
+              return JSON.parse(truncated);
+            } catch (truncErr) {
+              console.error(`[timeline] Failed to parse truncated JSON:`, truncErr.message);
+            }
+          }
+        }
+      }
+      
+      // All recovery attempts failed
+      throw new Error(`JSON parse failed: ${jsonErr.message}. File may be corrupted or incomplete.`);
+    }
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') {

@@ -4,9 +4,9 @@ After=network.target postgresql.service
 
 [Service]
 Type=oneshot
-User=YOUR_USER
+User=code
 WorkingDirectory=/home/code/journal
-ExecStart=/usr/bin/node scripts/send-digest-email.js
+ExecStart=/home/code/.nvm/versions/node/v24.12.0/bin/node /home/code/journal/scripts/send-digest-email.js
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=journal-digest

@@ -17,11 +17,14 @@
     "prisma:reset": "prisma migrate reset --force",
     "test-db": "node scripts/test-db.js",
     "reset-events": "node scripts/reset-events.js",
-    "reset-cursor": "node scripts/reset-cursor.js"
-    ,"pm2:build":"npm run ui:build"
-    ,"pm2:start":"pm2 start ecosystem.config.js --env production"
-    ,"pm2:restart":"pm2 reload ecosystem.config.js --env production"
-    ,"pm2:stop":"pm2 stop ecosystem.config.js --env production"
+    "reset-cursor": "node scripts/reset-cursor.js",
+    "pm2:build": "npm run ui:build",
+    "pm2:start": "pm2 start ecosystem.config.cjs --env production",
+    "pm2:restart": "pm2 reload ecosystem.config.cjs --env production",
+    "pm2:stop": "pm2 stop ecosystem.config.cjs --env production",
+    "pm2:logs": "pm2 logs evidence-journal",
+    "pm2:monit": "pm2 monit",
+    "pm2:status": "pm2 status"
   },
   "dependencies": {
     "@fastify/cookie": "^7.4.0",
@@ -47,6 +50,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.2",
+    "pm2": "^6.0.14",
     "prisma": "^5.22.0",
     "vite": "^5.4.8"
   }
