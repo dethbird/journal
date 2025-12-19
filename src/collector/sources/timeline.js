@@ -170,6 +170,23 @@ const buildTripExternalId = (segment) => {
 };
 
 /**
+ * Build canonical externalId for a path (timelinePath) event
+ */
+const buildPathExternalId = (segment) => {
+  const startTime = segment.startTime || '';
+  const endTime = segment.endTime || '';
+  const path = segment.timelinePath || [];
+  
+  // Use first point for approximate location
+  const firstPoint = path[0];
+  const coord = firstPoint?.point ? parseLatLng(firstPoint.point) : null;
+  const coordStr = coord ? `${roundCoord(coord.lat)},${roundCoord(coord.lng)}` : '';
+  
+  const canonical = `path|${startTime}|${endTime}|${coordStr}`;
+  return { externalId: hashCanonical(canonical), canonical };
+};
+
+/**
  * Normalize a visit segment into Event payload
  */
 const normalizeVisit = (segment) => {
@@ -246,6 +263,30 @@ const normalizeTrip = (segment) => {
 };
 
 /**
+ * Normalize a path (timelinePath) segment into Event payload
+ * These are GPS tracking segments - we keep them minimal for weather enrichment
+ */
+const normalizePath = (segment) => {
+  const path = segment.timelinePath || [];
+  // timelinePath is an array of {point: "lat°, lng°", time: "..."}
+  const firstPoint = path[0];
+  const location = firstPoint?.point ? parseLatLng(firstPoint.point) : null;
+  
+  return {
+    eventType: 'path',
+    startTime: segment.startTime,
+    endTime: segment.endTime,
+    durationMinutes: getDurationMinutes(segment.startTime, segment.endTime),
+    location,
+    pointCount: path.length || 0,
+    raw: {
+      timelinePath: { pointCount: path.length || 0 },
+      timezoneOffsetMinutes: segment.startTimeTimezoneUtcOffsetMinutes,
+    },
+  };
+};
+
+/**
  * Calculate duration in minutes between two ISO timestamps
  */
 const getDurationMinutes = (start, end) => {
@@ -262,11 +303,6 @@ const getDurationMinutes = (start, end) => {
  * Determine segment type and process accordingly
  */
 const processSegment = async (segment, userId) => {
-  // Skip timelinePath segments (noisy GPS data)
-  if (segment.timelinePath && !segment.visit && !segment.activity && !segment.timelineMemory) {
-    return null;
-  }
-  
   let payload, externalIdData;
   
   if (segment.visit) {
@@ -278,6 +314,9 @@ const processSegment = async (segment, userId) => {
   } else if (segment.timelineMemory?.trip) {
     payload = normalizeTrip(segment);
     externalIdData = buildTripExternalId(segment);
+  } else if (segment.timelinePath) {
+    payload = normalizePath(segment);
+    externalIdData = buildPathExternalId(segment);
   } else {
     // Skip unknown segment types
     return null;
@@ -358,6 +397,7 @@ const collectForAccount = async (account, cursor) => {
   }
 
   console.info(`[timeline] Fetching Timeline.json (${settings.driveFileName || settings.driveFileId}) for user ${userId}`);
+  console.info(`[timeline] Current cursor: ${cursor || 'none (will process all segments)'}`);
 
   const items = [];
   let maxTime = cursor ? new Date(cursor) : null;
@@ -387,6 +427,13 @@ const collectForAccount = async (account, cursor) => {
 
     const totalSegments = data.semanticSegments?.length ?? 0;
     console.info(`[timeline] User ${userId}: Timeline.json fetched successfully, found ${totalSegments} segments`);
+    
+    // Find and log date range in the file
+    if (totalSegments > 0) {
+      const firstSegmentTime = data.semanticSegments[0]?.startTime;
+      const lastSegmentTime = data.semanticSegments[totalSegments - 1]?.startTime;
+      console.info(`[timeline] User ${userId}: Timeline date range: ${firstSegmentTime} to ${lastSegmentTime}`);
+    }
 
     let processed = 0;
     let skipped = 0;
@@ -395,6 +442,7 @@ const collectForAccount = async (account, cursor) => {
     const itemsToInsert = [];
     const itemsWithLocation = []; // Track items with location for weather enrichment
 
+    // Process segments - they may not be in chronological order!
     for (const segment of parseTimelineSegments(data)) {
       examined++;
 
@@ -411,7 +459,8 @@ const collectForAccount = async (account, cursor) => {
 
       const segmentTime = new Date(segment.startTime);
 
-      // Skip if we've already processed this
+      // Skip if we've already processed this (cursor check)
+      // Note: segments are NOT guaranteed to be in chronological order
       if (lastProcessedTime && segmentTime <= lastProcessedTime) {
         skipped++;
         continue;
