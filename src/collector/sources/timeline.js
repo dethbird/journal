@@ -417,7 +417,7 @@ const collectForAccount = async (account, cursor) => {
         continue;
       }
 
-      const item = processSegment(segment, userId);
+      const item = await processSegment(segment, userId);
       if (item) {
         itemsToInsert.push(item);
         
@@ -456,6 +456,7 @@ const collectForAccount = async (account, cursor) => {
         // Don't add to items array - we're handling insert here, runner shouldn't re-insert
       } catch (err) {
         console.error(`[timeline] User ${userId}: batch insert failed:`, err.message);
+        console.error(`[timeline] Sample item structure:`, JSON.stringify(batch[0], null, 2));
       }
     }
 
