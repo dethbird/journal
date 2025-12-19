@@ -1,0 +1,13 @@
+[Unit]
+Description=Evidence Journal Daily Digest Timer
+Requires=journal-digest.service
+
+[Timer]
+# Run daily at 5:00 AM
+OnCalendar=daily
+OnCalendar=*-*-* 05:00:00
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

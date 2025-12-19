@@ -75,6 +75,15 @@ SMTP_PASS=...
 
 # Other
 PORT=4001
+
+# Digest email (for scheduled daily email)
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_SECURE=false  # true for port 465
+SMTP_USER=you@example.com
+SMTP_PASS=...
+SMTP_FROM=you@example.com
+DIGEST_EMAIL_TO=you@example.com
 ```
 
 Note: Some integration settings (e.g. Drive folder id, timeline filename, collector toggles) are stored in the application's settings UI or in account-specific settings; see the web app for per-account configuration.
@@ -101,6 +110,100 @@ node src/collector/run.js
 ```
 
 Adjust commands to match scripts in `package.json` (e.g. `npm run collector` if present).
+
+## Scheduled Jobs (Systemd / Cron)
+
+For production use, set up automated scheduling:
+
+### Collector (every 30 minutes)
+
+The collector can run frequently (every 30-60 minutes) since it's fast and Google tokens are valid for longer. You can always trigger a manual refresh from the UI if needed.
+
+**Systemd (recommended):**
+
+1. Copy service and timer files:
+
+```bash
+sudo cp systemd/journal-collector.service /etc/systemd/system/
+sudo cp systemd/journal-collector.timer /etc/systemd/system/
+```
+
+2. Edit the service file to set your user and paths:
+
+```bash
+sudo nano /etc/systemd/system/journal-collector.service
+# Update User=YOUR_USER and WorkingDirectory=/path/to/journal
+```
+
+3. Enable and start the timer:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable journal-collector.timer
+sudo systemctl start journal-collector.timer
+```
+
+4. Check status:
+
+```bash
+sudo systemctl status journal-collector.timer
+sudo journalctl -u journal-collector.service -f
+```
+
+**Cron alternative:**
+
+See [systemd/CRON.md](systemd/CRON.md) for crontab examples.
+
+### Daily Digest Email (5:00 AM)
+
+Send a daily digest email at 5:00 AM with yesterday's journal entry and collected items.
+
+**Systemd:**
+
+1. Copy service and timer files:
+
+```bash
+sudo cp systemd/journal-digest.service /etc/systemd/system/
+sudo cp systemd/journal-digest.timer /etc/systemd/system/
+```
+
+2. Edit the service file to set your user and paths:
+
+```bash
+sudo nano /etc/systemd/system/journal-digest.service
+# Update User=YOUR_USER and WorkingDirectory=/path/to/journal
+```
+
+3. Add SMTP credentials to your `.env`:
+
+```
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=you@example.com
+SMTP_PASS=your-password
+DIGEST_EMAIL_TO=you@example.com
+```
+
+4. Enable and start the timer:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable journal-digest.timer
+sudo systemctl start journal-digest.timer
+```
+
+5. Check status:
+
+```bash
+sudo systemctl status journal-digest.timer
+sudo journalctl -u journal-digest.service -f
+```
+
+**Manual test:**
+
+```bash
+node scripts/send-digest-email.js
+```
 
 ## User Setup (Integration details)
 

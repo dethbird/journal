@@ -1,0 +1,19 @@
+[Unit]
+Description=Evidence Journal Collector
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=YOUR_USER
+WorkingDirectory=/path/to/journal
+ExecStart=/usr/bin/node src/collector/run.js
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=journal-collector
+
+# Environment
+Environment="NODE_ENV=production"
+EnvironmentFile=-/path/to/journal/.env
+
+[Install]
+WantedBy=multi-user.target
