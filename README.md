@@ -271,6 +271,141 @@ See the `LICENSE` file in the repository.
 
 If you'd like, I can also add a small `.env.example` file showing the variables above, or update the `package.json` scripts section with helpful developer aliases. Review this README and tell me any detail you'd like adjusted or expanded.
 
+## Reverse proxy with Apache (subdomain → Node)
+
+If you host multiple sites behind Apache and point subdomains to vhost locations, use Apache as a reverse proxy to forward traffic to the running Node server on `localhost:PORT`.
+
+Example Apache vhost (replace `sub.example.com` and port):
+
+```apache
+<VirtualHost *:80>
+   ServerName sub.example.com
+   ProxyPreserveHost On
+   ProxyRequests Off
+   ProxyPass / http://127.0.0.1:5001/
+   ProxyPassReverse / http://127.0.0.1:5001/
+   RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
+   ErrorLog ${APACHE_LOG_DIR}/sub.example.com-error.log
+   CustomLog ${APACHE_LOG_DIR}/sub.example.com-access.log combined
+</VirtualHost>
+```
+
+Enable required Apache modules and reload:
+
+```bash
+sudo a2enmod proxy proxy_http proxy_wstunnel headers rewrite
+sudo systemctl reload apache2
+```
+
+For HTTPS, obtain a certificate using Certbot (or use your control panel):
+
+```bash
+sudo apt install certbot python3-certbot-apache
+sudo certbot --apache -d sub.example.com
+```
+
+If you use sPanel or another control panel, it often exposes vhost and SSL configuration in the UI — paste the `ProxyPass` lines into the custom vhost section if available.
+
+## PostgreSQL & Prisma (sPanel and SSH guidance)
+
+You can create the database using sPanel's database UI or via the server's `psql` if you have SSH access. Example (SSH):
+
+```bash
+# install/postgres if needed (on Debian/Ubuntu)
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib
+
+# create DB and user
+sudo -u postgres psql -c "CREATE ROLE journal WITH LOGIN PASSWORD 'YOUR_STRONG_PASSWORD';"
+sudo -u postgres psql -c "CREATE DATABASE journal_prod OWNER journal;"
+```
+
+If using sPanel, create a database and user there and copy the provided connection string.
+
+Set `DATABASE_URL` in your `.env` (example):
+
+```
+DATABASE_URL=postgresql://journal:YOUR_STRONG_PASSWORD@localhost:5432/journal_prod
+```
+
+Prisma commands (deploy or quick sync):
+
+```bash
+# generate client
+npx prisma generate
+
+# production: run migrations
+npx prisma migrate deploy
+
+# OR quick sync (development):
+npx prisma db push
+```
+
+If your VPS blocks direct DB access, create the database via sPanel and set the host to the sPanel-provided host. Confirm connectivity from the server with:
+
+```bash
+psql "$DATABASE_URL" -c '\l'
+```
+
+## Choosing PM2 vs systemd (short guidance)
+
+- PM2: easier for Node process management, logs, clustering, and `pm2 startup` auto-start support. Use when you want a simple Node-centric manager.
+- systemd: more standard for system processes and integrates with the OS boot and monitoring. Use when you prefer system-level units and fewer Node-specific dependencies.
+
+PM2 quick commands (included npm scripts):
+
+```bash
+npm run pm2:build    # build ui
+npm run pm2:start    # start via ecosystem.config.cjs
+npm run pm2:status
+npm run pm2:logs
+npm run pm2:stop
+```
+
+systemd quick example (create `/etc/systemd/system/evidence-journal.service`):
+
+```ini
+[Unit]
+Description=Evidence Journal Node app
+After=network.target
+
+[Service]
+User=youruser
+WorkingDirectory=/path/to/journal
+ExecStart=/usr/bin/node /path/to/journal/src/web/server.js
+Restart=on-failure
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Reload and enable:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now evidence-journal.service
+sudo journalctl -u evidence-journal.service -f
+```
+
+## Testing & verification commands
+
+Verify the server responds through Apache proxy:
+
+```bash
+curl -I http://sub.example.com/
+```
+
+Check PM2 or systemd logs:
+
+```bash
+npm run pm2:logs
+# or
+sudo journalctl -u evidence-journal.service -f
+```
+
+If you'd like, I can also add a short `DEPLOY.md` with copy-paste commands tailored to your VPS (including exact `ServerName` substitutions) or generate the Apache vhost file for your subdomain now. Tell me the subdomain(s) and whether you want PM2 or systemd and I'll produce exact files and commands.
+
 # Evidence Journal
 
 A Fastify API + React UI monolith that collects personal activity events, stores them in Postgres via Prisma, and can produce digest-friendly data while also serving a SPA frontend.
