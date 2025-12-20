@@ -267,9 +267,9 @@ const TimelineSection = ({ section }) => {
   );
 };
 
-const JournalSection = ({ entry }) => {
-  if (!entry) return null;
-  const { frontmatter, body } = parseFrontmatter(entry.content);
+const JournalSection = ({ entry, goals, onToggleGoal }) => {
+  if (!entry && (!goals || goals.length === 0)) return null;
+  const { frontmatter, body } = entry ? parseFrontmatter(entry.content) : { frontmatter: {}, body: '' };
   const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags : [];
   return (
     <div className="box">
@@ -291,19 +291,35 @@ const JournalSection = ({ entry }) => {
         </a>
       </div>
 
-      {/* Goals section (from entry.goals) */}
-      {entry.goals ? (
+      {/* Goals section */}
+      {goals && goals.length > 0 ? (
         <div className="mb-3">
-          <p className="has-text-weight-semibold">Goals</p>
-          <div className="content" dangerouslySetInnerHTML={{ __html: marked(entry.goals) }} />
+          <p className="has-text-weight-semibold mb-2">Goals</p>
+          <div className="goals-list">
+            {goals.map((goal) => (
+              <div key={goal.id} className="is-flex is-align-items-center mb-1">
+                <label className="checkbox is-flex is-align-items-center">
+                  <input
+                    type="checkbox"
+                    checked={goal.completed}
+                    onChange={() => onToggleGoal && onToggleGoal(goal.id, goal.completed)}
+                    className="mr-2"
+                  />
+                  <span className={goal.completed ? 'has-text-grey-light' : ''} style={goal.completed ? { textDecoration: 'line-through' } : {}}>
+                    {goal.text}
+                  </span>
+                </label>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
 
       {body ? (
         <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(body) }} />
-      ) : (
+      ) : !goals || goals.length === 0 ? (
         <p className="has-text-grey">No journal content</p>
-      )}
+      ) : null}
       {(frontmatter.mood || frontmatter.energy || tags.length > 0) && (
         <div className="mt-3">
           {frontmatter.mood && (
@@ -324,6 +340,7 @@ const JournalSection = ({ entry }) => {
 export default function Digest({ offsetDays = 0 }) {
   const [state, setState] = useState({ loading: true, error: null, vm: null });
   const [journalEntry, setJournalEntry] = useState(null);
+  const [goals, setGoals] = useState([]);
   const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
 
   useEffect(() => {
@@ -335,11 +352,13 @@ export default function Digest({ offsetDays = 0 }) {
       try {
         setState({ loading: true, error: null, vm: null });
         setJournalEntry(null);
+        setGoals([]);
 
-        // Fetch digest and journal in parallel
-        const [digestRes, journalRes] = await Promise.all([
+        // Fetch digest, journal, and goals in parallel
+        const [digestRes, journalRes, goalsRes] = await Promise.all([
           fetch(`/api/digest?since=${start.toISOString()}&until=${end.toISOString()}`, { credentials: 'include' }),
           fetch(`/api/journal?date=${dateISO}`, { credentials: 'include' }),
+          fetch(`/api/goals?date=${dateISO}`, { credentials: 'include' }),
         ]);
 
         if (!digestRes.ok) {
@@ -352,9 +371,16 @@ export default function Digest({ offsetDays = 0 }) {
           journalData = await journalRes.json();
         }
 
+        let goalsData = [];
+        if (goalsRes.ok) {
+          const gd = await goalsRes.json();
+          goalsData = gd.goals || [];
+        }
+
         if (!cancelled) {
           setState({ loading: false, error: null, vm: digestData });
           setJournalEntry(journalData?.entry || null);
+          setGoals(goalsData);
         }
       } catch (err) {
         if (!cancelled) setState({ loading: false, error: err.message, vm: null });
@@ -365,6 +391,22 @@ export default function Digest({ offsetDays = 0 }) {
       cancelled = true;
     };
   }, [offsetDays]);
+
+  const handleToggleGoal = async (goalId, completed) => {
+    try {
+      const res = await fetch(`/api/goals/${goalId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: !completed }),
+      });
+      if (!res.ok) throw new Error('Failed to toggle goal');
+      const data = await res.json();
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? data.goal : g)));
+    } catch (err) {
+      console.error('Toggle goal error:', err);
+    }
+  };
 
   const handleSend = async () => {
     const { start, end } = buildWindow(offsetDays);
@@ -409,7 +451,7 @@ export default function Digest({ offsetDays = 0 }) {
   return (
     <div>
       {/* Journal entry at the top if present */}
-      <JournalSection entry={journalEntry} />
+      <JournalSection entry={journalEntry} goals={goals} onToggleGoal={handleToggleGoal} />
 
       <div className="box">
         <div className="is-flex is-align-items-center is-justify-content-space-between">
@@ -437,7 +479,7 @@ export default function Digest({ offsetDays = 0 }) {
             ) : null}
           </div>
         </div>
-        {!vm.sections?.length && !journalEntry && <p className="has-text-grey mt-3">No events in this window.</p>}
+        {!vm.sections?.length && !journalEntry && goals.length === 0 && <p className="has-text-grey mt-3">No events in this window.</p>}
       </div>
 
       {vm.sections?.map((section, idx) => {

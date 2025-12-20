@@ -1289,6 +1289,108 @@ app.delete('/api/journal', async (request, reply) => {
   }
 });
 
+// Goals API
+
+/**
+ * GET /api/goals?date=YYYY-MM-DD
+ * Fetch goals for a specific date
+ */
+app.get('/api/goals', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { date } = request.query;
+  if (!date) return reply.status(400).send({ error: 'date query param required' });
+
+  const normalizedDate = normalizeToMidnight(date);
+
+  const goals = await prisma.goal.findMany({
+    where: { userId: user.id, date: normalizedDate },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  return { goals: goals.map((g) => ({ id: g.id, text: g.text, completed: g.completed, sortOrder: g.sortOrder })) };
+});
+
+/**
+ * POST /api/goals
+ * Create a new goal for a specific date
+ * Body: { date: "YYYY-MM-DD", text: "goal text" }
+ */
+app.post('/api/goals', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { date, text } = request.body ?? {};
+  if (!date) return reply.status(400).send({ error: 'date required' });
+  if (!text || typeof text !== 'string') return reply.status(400).send({ error: 'text required' });
+
+  const normalizedDate = normalizeToMidnight(date);
+
+  // Get max sortOrder for this date
+  const maxOrder = await prisma.goal.aggregate({
+    where: { userId: user.id, date: normalizedDate },
+    _max: { sortOrder: true },
+  });
+  const nextOrder = (maxOrder._max.sortOrder ?? -1) + 1;
+
+  const goal = await prisma.goal.create({
+    data: { userId: user.id, date: normalizedDate, text: text.trim(), sortOrder: nextOrder },
+  });
+
+  return { goal: { id: goal.id, text: goal.text, completed: goal.completed, sortOrder: goal.sortOrder } };
+});
+
+/**
+ * PATCH /api/goals/:id
+ * Update a goal (toggle completed, change text)
+ * Body: { completed?: boolean, text?: string }
+ */
+app.patch('/api/goals/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+  const { completed, text } = request.body ?? {};
+
+  // Verify ownership
+  const existing = await prisma.goal.findUnique({ where: { id } });
+  if (!existing || existing.userId !== user.id) {
+    return reply.status(404).send({ error: 'Goal not found' });
+  }
+
+  const updateData = {};
+  if (typeof completed === 'boolean') updateData.completed = completed;
+  if (typeof text === 'string') updateData.text = text.trim();
+
+  const goal = await prisma.goal.update({
+    where: { id },
+    data: updateData,
+  });
+
+  return { goal: { id: goal.id, text: goal.text, completed: goal.completed, sortOrder: goal.sortOrder } };
+});
+
+/**
+ * DELETE /api/goals/:id
+ * Delete a goal
+ */
+app.delete('/api/goals/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+
+  // Verify ownership
+  const existing = await prisma.goal.findUnique({ where: { id } });
+  if (!existing || existing.userId !== user.id) {
+    return reply.status(404).send({ error: 'Goal not found' });
+  }
+
+  await prisma.goal.delete({ where: { id } });
+  return { ok: true };
+});
+
 // Collector API
 
 /**

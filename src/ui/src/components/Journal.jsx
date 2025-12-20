@@ -51,40 +51,60 @@ const buildFrontmatter = (fm) => {
 export default function Journal({ date, dateLabel }) {
   const [state, setState] = useState({ loading: true, error: null, entry: null });
   const [content, setContent] = useState('');
-  const [goals, setGoals] = useState('');
   const [saveState, setSaveState] = useState({ saving: false, message: null, error: null });
   const [mood, setMood] = useState('');
   const [energy, setEnergy] = useState('');
   const [tags, setTags] = useState('');
   const autoSaveTimer = useRef(null);
   const lastSavedContent = useRef('');
-  const lastSavedGoals = useRef('');
+
+  // Goals state
+  const [goals, setGoals] = useState([]);
+  const [goalsLoading, setGoalsLoading] = useState(true);
+  const [newGoalText, setNewGoalText] = useState('');
 
   // Load entry when date changes
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setState({ loading: true, error: null, entry: null });
+      setGoalsLoading(true);
       try {
-        const res = await fetch(`/api/journal?date=${date}`, { credentials: 'include' });
-        if (!res.ok) throw new Error(`Failed to load (${res.status})`);
-        const data = await res.json();
+        // Fetch journal entry and goals in parallel
+        const [entryRes, goalsRes] = await Promise.all([
+          fetch(`/api/journal?date=${date}`, { credentials: 'include' }),
+          fetch(`/api/goals?date=${date}`, { credentials: 'include' }),
+        ]);
+
+        if (!entryRes.ok) throw new Error(`Failed to load journal (${entryRes.status})`);
+        const entryData = await entryRes.json();
+
+        let goalsData = [];
+        if (goalsRes.ok) {
+          const gd = await goalsRes.json();
+          goalsData = gd.goals || [];
+        }
+
         if (!cancelled) {
-          const entryContent = data.entry?.content || '';
-          setState({ loading: false, error: null, entry: data.entry });
+          const entryContent = entryData.entry?.content || '';
+          setState({ loading: false, error: null, entry: entryData.entry });
 
           // Parse frontmatter
           const { frontmatter, body } = parseFrontmatter(entryContent);
           setContent(body);
-          setGoals(data.entry?.goals || '');
           setMood(frontmatter.mood || '');
           setEnergy(frontmatter.energy || '');
           setTags(Array.isArray(frontmatter.tags) ? frontmatter.tags.join(', ') : (frontmatter.tags || ''));
           lastSavedContent.current = entryContent;
-          lastSavedGoals.current = data.entry?.goals || '';
+
+          setGoals(goalsData);
+          setGoalsLoading(false);
         }
       } catch (err) {
-        if (!cancelled) setState({ loading: false, error: err.message, entry: null });
+        if (!cancelled) {
+          setState({ loading: false, error: err.message, entry: null });
+          setGoalsLoading(false);
+        }
       }
     };
     load();
@@ -106,7 +126,7 @@ export default function Journal({ date, dateLabel }) {
   // Save entry
   const save = async () => {
     const fullContent = buildFullContent();
-    if (fullContent === lastSavedContent.current && goals === lastSavedGoals.current) return; // No changes
+    if (fullContent === lastSavedContent.current) return; // No changes
 
     setSaveState({ saving: true, message: null, error: null });
     try {
@@ -114,14 +134,13 @@ export default function Journal({ date, dateLabel }) {
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date, content: fullContent, goals }),
+        body: JSON.stringify({ date, content: fullContent }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `Save failed (${res.status})`);
       }
       lastSavedContent.current = fullContent;
-      lastSavedGoals.current = goals;
       setSaveState({ saving: false, message: 'Saved', error: null });
       setTimeout(() => setSaveState((s) => ({ ...s, message: null })), 1500);
     } catch (err) {
@@ -138,7 +157,62 @@ export default function Journal({ date, dateLabel }) {
     return () => {
       if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     };
-  }, [content, mood, energy, tags, goals]);
+  }, [content, mood, energy, tags]);
+
+  // Goal actions
+  const addGoal = async () => {
+    if (!newGoalText.trim()) return;
+    try {
+      const res = await fetch('/api/goals', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, text: newGoalText.trim() }),
+      });
+      if (!res.ok) throw new Error('Failed to add goal');
+      const data = await res.json();
+      setGoals((prev) => [...prev, data.goal]);
+      setNewGoalText('');
+    } catch (err) {
+      console.error('Add goal error:', err);
+    }
+  };
+
+  const toggleGoal = async (goalId, completed) => {
+    try {
+      const res = await fetch(`/api/goals/${goalId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: !completed }),
+      });
+      if (!res.ok) throw new Error('Failed to toggle goal');
+      const data = await res.json();
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? data.goal : g)));
+    } catch (err) {
+      console.error('Toggle goal error:', err);
+    }
+  };
+
+  const deleteGoal = async (goalId) => {
+    try {
+      const res = await fetch(`/api/goals/${goalId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to delete goal');
+      setGoals((prev) => prev.filter((g) => g.id !== goalId));
+    } catch (err) {
+      console.error('Delete goal error:', err);
+    }
+  };
+
+  const handleNewGoalKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addGoal();
+    }
+  };
 
   if (state.loading) {
     return (
@@ -182,22 +256,67 @@ export default function Journal({ date, dateLabel }) {
           </div>
         </div>
 
-        <div className="field mb-3">
-          <label className="label is-small">Goals (morning)</label>
-          <div className="control">
-            <textarea
-              className="textarea is-small"
-              rows={4}
-              placeholder="Your goals for the day (Markdown supported)"
-              value={goals}
-              onChange={(e) => setGoals(e.target.value)}
-              onBlur={save}
-            />
-          </div>
-          <p className="help has-text-grey">Saved separately from the main journal content.</p>
+        {/* Goals section */}
+        <div className="field mb-4">
+          <label className="label is-small">Goals for the day</label>
+          {goalsLoading ? (
+            <p className="has-text-grey is-size-7">Loading goals…</p>
+          ) : (
+            <div className="goals-list">
+              {goals.length === 0 && (
+                <p className="has-text-grey is-size-7 mb-2">No goals yet. Add one below.</p>
+              )}
+              {goals.map((goal) => (
+                <div key={goal.id} className="is-flex is-align-items-center mb-2 goal-item">
+                  <label className="checkbox is-flex is-align-items-center" style={{ flex: 1 }}>
+                    <input
+                      type="checkbox"
+                      checked={goal.completed}
+                      onChange={() => toggleGoal(goal.id, goal.completed)}
+                      className="mr-2"
+                    />
+                    <span className={goal.completed ? 'has-text-grey-light' : ''} style={goal.completed ? { textDecoration: 'line-through' } : {}}>
+                      {goal.text}
+                    </span>
+                  </label>
+                  <button
+                    className="button is-small is-light is-danger ml-2"
+                    onClick={() => deleteGoal(goal.id)}
+                    title="Delete goal"
+                  >
+                    <span className="icon is-small">
+                      <i className="fa-solid fa-trash" />
+                    </span>
+                  </button>
+                </div>
+              ))}
+              <div className="is-flex is-align-items-center mt-2">
+                <input
+                  className="input is-small"
+                  type="text"
+                  placeholder="Add a new goal…"
+                  value={newGoalText}
+                  onChange={(e) => setNewGoalText(e.target.value)}
+                  onKeyDown={handleNewGoalKeyDown}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  className="button is-small is-success ml-2"
+                  onClick={addGoal}
+                  disabled={!newGoalText.trim()}
+                >
+                  <span className="icon is-small">
+                    <i className="fa-solid fa-plus" />
+                  </span>
+                  <span>Add</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="field">
+          <label className="label is-small">Journal Entry</label>
           <div className="control">
             <textarea
               className="textarea"
