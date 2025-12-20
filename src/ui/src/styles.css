@@ -109,3 +109,25 @@ ul {
   margin-top: 0;
 }
 
+/* Top timestamp bar aligned to the right above the main content */
+.top-timestamp {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 6px;
+  padding-right: 12px;
+}
+.timestamp {
+  font-size: 0.75rem;
+  color: #4a4a4a;
+  background-color: rgba(0,0,0,0.02);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-align: right;
+}
+.timestamp.running {
+  color: #7a4a00;
+  background-color: transparent;
+  padding: 0;
+}
+

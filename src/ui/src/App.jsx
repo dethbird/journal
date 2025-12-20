@@ -189,7 +189,20 @@ function App() {
   }, []);
 
   return (
-    <section className="hero is-fullheight has-background-light">
+    <>
+      <div className="top-timestamp">
+        {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
+          <div className="timestamp">
+            Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
+            {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
+          </div>
+        ) : collectorStatus?.currentRunning ? (
+          <div className="timestamp running">
+            Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
+          </div>
+        ) : null}
+      </div>
+      <section className="hero is-fullheight has-background-light">
       <div className="hero-body">
         <div className="container">
           {state.loading && <p className="subtitle">Loading…</p>}
@@ -204,17 +217,6 @@ function App() {
                     <h1 className="title is-2">Hello, {state.user.displayName || 'friend'}</h1>
                     {sendState.message ? <p className="help is-success">{sendState.message}</p> : null}
                     {sendState.error ? <p className="help is-danger">{sendState.error}</p> : null}
-                    {collectorStatus?.recentRuns?.[0] && !collectorStatus.currentRunning && (
-                      <p className="help is-info">
-                        Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
-                        {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
-                      </p>
-                    )}
-                    {collectorStatus?.currentRunning && (
-                      <p className="help is-warning">
-                        Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
-                      </p>
-                    )}
                   </div>
                 </div>
                 <div className="level-right">
@@ -373,8 +375,9 @@ function App() {
           )}
         </div>
       </div>
-    </section>
-  );
+      </section>
+    </>
+    );
 }
 
 export default App;
