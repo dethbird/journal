@@ -1391,6 +1391,101 @@ app.delete('/api/goals/:id', async (request, reply) => {
   return { ok: true };
 });
 
+// Journal Logs API
+
+/**
+ * GET /api/logs?date=YYYY-MM-DD
+ * Fetch journal logs for a specific date (oldest first)
+ */
+app.get('/api/logs', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { date } = request.query;
+  if (!date) return reply.status(400).send({ error: 'date query param required' });
+
+  const normalizedDate = normalizeToMidnight(date);
+
+  const logs = await prisma.journalLog.findMany({
+    where: { userId: user.id, date: normalizedDate },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  return { logs: logs.map((l) => ({ id: l.id, content: l.content, createdAt: l.createdAt.toISOString() })) };
+});
+
+/**
+ * POST /api/logs
+ * Create a new journal log entry for a specific date
+ * Body: { date: "YYYY-MM-DD", content: "markdown string" }
+ */
+app.post('/api/logs', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { date, content } = request.body ?? {};
+  if (!date) return reply.status(400).send({ error: 'date required' });
+  if (!content || typeof content !== 'string') return reply.status(400).send({ error: 'content required' });
+
+  const normalizedDate = normalizeToMidnight(date);
+
+  const log = await prisma.journalLog.create({
+    data: { userId: user.id, date: normalizedDate, content: content.trim() },
+  });
+
+  return { log: { id: log.id, content: log.content, createdAt: log.createdAt.toISOString() } };
+});
+
+/**
+ * PATCH /api/logs/:id
+ * Update a journal log entry
+ * Body: { content: "markdown string" }
+ */
+app.patch('/api/logs/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+  const { content } = request.body ?? {};
+
+  // Verify ownership
+  const existing = await prisma.journalLog.findUnique({ where: { id } });
+  if (!existing || existing.userId !== user.id) {
+    return reply.status(404).send({ error: 'Log not found' });
+  }
+
+  if (typeof content !== 'string') {
+    return reply.status(400).send({ error: 'content required' });
+  }
+
+  const log = await prisma.journalLog.update({
+    where: { id },
+    data: { content: content.trim() },
+  });
+
+  return { log: { id: log.id, content: log.content, createdAt: log.createdAt.toISOString() } };
+});
+
+/**
+ * DELETE /api/logs/:id
+ * Delete a journal log entry
+ */
+app.delete('/api/logs/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+
+  // Verify ownership
+  const existing = await prisma.journalLog.findUnique({ where: { id } });
+  if (!existing || existing.userId !== user.id) {
+    return reply.status(404).send({ error: 'Log not found' });
+  }
+
+  await prisma.journalLog.delete({ where: { id } });
+  return { ok: true };
+});
+
 // Collector API
 
 /**

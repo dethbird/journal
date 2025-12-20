@@ -39,35 +39,6 @@ const cToF = (c) => {
   return Math.round(((n * 9) / 5 + 32) * 10) / 10;
 };
 
-/**
- * Parse frontmatter from markdown content.
- */
-const parseFrontmatter = (content) => {
-  if (!content || !content.startsWith('---')) {
-    return { frontmatter: {}, body: content || '' };
-  }
-  const endIdx = content.indexOf('\n---', 3);
-  if (endIdx === -1) {
-    return { frontmatter: {}, body: content };
-  }
-  const fmBlock = content.slice(4, endIdx);
-  const body = content.slice(endIdx + 4).replace(/^\n/, '');
-
-  const frontmatter = {};
-  for (const line of fmBlock.split('\n')) {
-    const colonIdx = line.indexOf(':');
-    if (colonIdx > 0) {
-      const key = line.slice(0, colonIdx).trim();
-      let value = line.slice(colonIdx + 1).trim();
-      if (value.startsWith('[') && value.endsWith(']')) {
-        value = value.slice(1, -1).split(',').map((s) => s.trim()).filter(Boolean);
-      }
-      frontmatter[key] = value;
-    }
-  }
-  return { frontmatter, body };
-};
-
 const GithubSection = ({ section }) => {
   if (!section) return null;
   return (
@@ -267,10 +238,18 @@ const TimelineSection = ({ section }) => {
   );
 };
 
-const JournalSection = ({ entry, goals, onToggleGoal }) => {
-  if (!entry && (!goals || goals.length === 0)) return null;
-  const { frontmatter, body } = entry ? parseFrontmatter(entry.content) : { frontmatter: {}, body: '' };
-  const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags : [];
+const JournalSection = ({ logs, goals, onToggleGoal }) => {
+  if ((!logs || logs.length === 0) && (!goals || goals.length === 0)) return null;
+
+  const formatLogTime = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch (e) {
+      return iso;
+    }
+  };
+
   return (
     <div className="box">
       <div className="is-flex is-align-items-center is-justify-content-space-between mb-2">
@@ -315,31 +294,26 @@ const JournalSection = ({ entry, goals, onToggleGoal }) => {
         </div>
       ) : null}
 
-      {body ? (
-        <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(body) }} />
-      ) : !goals || goals.length === 0 ? (
-        <p className="has-text-grey">No journal content</p>
-      ) : null}
-      {(frontmatter.mood || frontmatter.energy || tags.length > 0) && (
-        <div className="mt-3">
-          {frontmatter.mood && (
-            <span className="tag is-info is-light mr-2">Mood: {frontmatter.mood}</span>
-          )}
-          {frontmatter.energy && (
-            <span className="tag is-success is-light mr-2">Energy: {frontmatter.energy}</span>
-          )}
-          {tags.map((tag) => (
-            <span key={tag} className="tag is-light mr-1">{tag}</span>
+      {/* Logs section - oldest first */}
+      {logs && logs.length > 0 ? (
+        <div className="journal-logs">
+          {logs.map((log) => (
+            <div key={log.id} className="mb-3">
+              <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
+              <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(log.content || '') }} />
+            </div>
           ))}
         </div>
-      )}
+      ) : (!goals || goals.length === 0) ? (
+        <p className="has-text-grey">No journal content</p>
+      ) : null}
     </div>
   );
 };
 
 export default function Digest({ offsetDays = 0 }) {
   const [state, setState] = useState({ loading: true, error: null, vm: null });
-  const [journalEntry, setJournalEntry] = useState(null);
+  const [logs, setLogs] = useState([]);
   const [goals, setGoals] = useState([]);
   const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
 
@@ -351,13 +325,13 @@ export default function Digest({ offsetDays = 0 }) {
     const load = async () => {
       try {
         setState({ loading: true, error: null, vm: null });
-        setJournalEntry(null);
+        setLogs([]);
         setGoals([]);
 
-        // Fetch digest, journal, and goals in parallel
-        const [digestRes, journalRes, goalsRes] = await Promise.all([
+        // Fetch digest, logs, and goals in parallel
+        const [digestRes, logsRes, goalsRes] = await Promise.all([
           fetch(`/api/digest?since=${start.toISOString()}&until=${end.toISOString()}`, { credentials: 'include' }),
-          fetch(`/api/journal?date=${dateISO}`, { credentials: 'include' }),
+          fetch(`/api/logs?date=${dateISO}`, { credentials: 'include' }),
           fetch(`/api/goals?date=${dateISO}`, { credentials: 'include' }),
         ]);
 
@@ -366,9 +340,11 @@ export default function Digest({ offsetDays = 0 }) {
         }
         const digestData = await digestRes.json();
 
-        let journalData = null;
-        if (journalRes.ok) {
-          journalData = await journalRes.json();
+        let logsData = [];
+        if (logsRes.ok) {
+          const ld = await logsRes.json();
+          // Sort oldest first for display
+          logsData = (ld.logs || []).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
         }
 
         let goalsData = [];
@@ -379,7 +355,7 @@ export default function Digest({ offsetDays = 0 }) {
 
         if (!cancelled) {
           setState({ loading: false, error: null, vm: digestData });
-          setJournalEntry(journalData?.entry || null);
+          setLogs(logsData);
           setGoals(goalsData);
         }
       } catch (err) {
@@ -451,7 +427,7 @@ export default function Digest({ offsetDays = 0 }) {
   return (
     <div>
       {/* Journal entry at the top if present */}
-      <JournalSection entry={journalEntry} goals={goals} onToggleGoal={handleToggleGoal} />
+      <JournalSection logs={logs} goals={goals} onToggleGoal={handleToggleGoal} />
 
       <div className="box">
         <div className="is-flex is-align-items-center is-justify-content-space-between">
@@ -479,7 +455,7 @@ export default function Digest({ offsetDays = 0 }) {
             ) : null}
           </div>
         </div>
-        {!vm.sections?.length && !journalEntry && goals.length === 0 && <p className="has-text-grey mt-3">No events in this window.</p>}
+        {!vm.sections?.length && logs.length === 0 && goals.length === 0 && <p className="has-text-grey mt-3">No events in this window.</p>}
       </div>
 
       {vm.sections?.map((section, idx) => {

@@ -89,6 +89,7 @@ model User {
   journalEntries    JournalEntry[]
   collectorRuns     CollectorRun[]
   goals             Goal[]
+  journalLogs       JournalLog[]
 }
 
 model JournalEntry {
@@ -96,7 +97,7 @@ model JournalEntry {
   userId    String
   date      DateTime // normalized to local midnight
   content   String   // Markdown with optional frontmatter
-  goals     String?  // Morning goals (Markdown)
+  goals     String?  // Morning goals (Markdown) - DEPRECATED, use Goal model
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -104,6 +105,20 @@ model JournalEntry {
 
   @@unique([userId, date])
   @@index([userId])
+}
+
+model JournalLog {
+  id        String   @id @default(cuid())
+  userId    String
+  date      DateTime // normalized to local midnight
+  content   String   // Markdown content
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, date])
+  @@index([createdAt])
 }
 
 model AuthIdentity {
