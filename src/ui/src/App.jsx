@@ -111,7 +111,7 @@ const startOfDay = (date) => {
 };
 
 const formatDateLabel = (date) => {
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  return date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 };
 
 const formatDateISO = (date) => {
