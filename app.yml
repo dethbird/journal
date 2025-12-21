@@ -1,0 +1,11 @@
+apps:
+- name: journal.dethbird.com
+  log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
+  cwd: /home/dethbird/journal.dethbird.com/
+  script: "npm"
+  args: "run start"
+  interpreter: "/home/dethbird/.nvm/versions/node/v22.21.1/bin/node"
+  env:
+   NODE_ENV: "production"
+   NODE_PORT: 4001
+
