@@ -328,62 +328,59 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
   };
 
   return (
-    <div className="box">
-      <div className="is-flex is-align-items-center is-justify-content-space-between mb-2">
-        <p className="title is-5 mb-0">Journal</p>
-        <a
-          href="/journal"
-          className="button is-small is-light"
-          onClick={(e) => {
-            e.preventDefault();
-            window.history.pushState({}, '', '/journal');
-            window.dispatchEvent(new PopStateEvent('popstate'));
-          }}
-        >
-          <span className="icon">
-            <i className="fa-solid fa-pen-to-square" />
-          </span>
-          <span>Edit</span>
-        </a>
-      </div>
-
-      {/* Goals section */}
-      {goals && goals.length > 0 ? (
-        <div className="mb-3">
-          <p className="has-text-weight-semibold mb-2">Goals</p>
-          <div className="goals-list">
-            {goals.map((goal) => (
-              <div key={goal.id} className="is-flex is-align-items-center mb-1">
-                <label className="checkbox is-flex is-align-items-center">
-                  <input
-                    type="checkbox"
-                    checked={goal.completed}
-                    onChange={() => onToggleGoal && onToggleGoal(goal.id, goal.completed)}
-                    className="mr-2"
-                  />
-                  <span className={goal.completed ? 'has-text-grey-light' : ''} style={goal.completed ? { textDecoration: 'line-through' } : {}}>
-                    {goal.text}
-                  </span>
-                </label>
+    <div className="columns is-variable is-6 is-multiline">
+      <div className="column is-12-mobile is-6-desktop">
+        <div className="card">
+          <header className="card-header">
+            <p className="card-header-title">Goals</p>
+          </header>
+          <div className="card-content">
+            {goals && goals.length > 0 ? (
+              <div className="goals-list">
+                {goals.map((goal) => (
+                  <div key={goal.id} className="is-flex is-align-items-center mb-2">
+                    <label className="checkbox is-flex is-align-items-center">
+                      <input
+                        type="checkbox"
+                        checked={goal.completed}
+                        onChange={() => onToggleGoal && onToggleGoal(goal.id, goal.completed)}
+                        className="mr-2"
+                      />
+                      <span className={goal.completed ? 'has-text-grey-light' : ''} style={goal.completed ? { textDecoration: 'line-through' } : {}}>
+                        {goal.text}
+                      </span>
+                    </label>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <p className="has-text-grey">No goals</p>
+            )}
           </div>
         </div>
-      ) : null}
+      </div>
 
-      {/* Logs section - oldest first */}
-      {logs && logs.length > 0 ? (
-        <div className="journal-logs">
-          {logs.map((log) => (
-            <div key={log.id} className="mb-3">
-              <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
-              <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(log.content || '') }} />
-            </div>
-          ))}
+      <div className="column is-12-mobile is-6-desktop">
+        <div className="card">
+          <header className="card-header">
+            <p className="card-header-title">Journal</p>
+          </header>
+          <div className="card-content">
+            {logs && logs.length > 0 ? (
+              <div className="journal-logs">
+                {logs.map((log) => (
+                  <div key={log.id} className="mb-3">
+                    <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
+                    <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(log.content || '') }} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="has-text-grey">No journal content</p>
+            )}
+          </div>
         </div>
-      ) : (!goals || goals.length === 0) ? (
-        <p className="has-text-grey">No journal content</p>
-      ) : null}
+      </div>
     </div>
   );
 };
