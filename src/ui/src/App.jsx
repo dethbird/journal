@@ -206,25 +206,57 @@ function App() {
           {!state.loading && !state.error && state.user && (
             <div>
               <div className="mb-4">
-                {/* Navigation menu at top */}
-                <div className="level mb-3">
-                  <div className="level-left">
-                    <div>
-                      <p className="subtitle is-6 has-text-grey mb-0">Evidence Journal ({state.user.displayName || 'friend'})</p>
-                      {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
-                        <p className="is-size-7 has-text-grey">
-                          Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
-                          {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
-                        </p>
-                      ) : collectorStatus?.currentRunning ? (
-                        <p className="is-size-7 has-text-grey">
-                          Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
-                        </p>
-                      ) : null}
-                    </div>
+                {/* Three column header that stacks on mobile */}
+                <div className="columns is-mobile is-multiline">
+                  {/* Column 1: Header and collection status */}
+                  <div className="column is-12-mobile is-4-tablet has-text-centered">
+                    <p className="subtitle is-6 has-text-grey mb-0">Evidence Journal ({state.user.displayName || 'friend'})</p>
+                    {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
+                      <p className="is-size-7 has-text-grey">
+                        Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
+                        {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
+                      </p>
+                    ) : collectorStatus?.currentRunning ? (
+                      <p className="is-size-7 has-text-grey">
+                        Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
+                      </p>
+                    ) : null}
                   </div>
-                  <div className="level-right">
-                    <div className="buttons">
+
+                  {/* Column 2: Date selector with weather */}
+                  <div className="column is-12-mobile is-4-tablet has-text-centered">
+                    <div className="buttons is-centered">
+                      <button
+                        className="button is-small"
+                        onClick={() => setOffsetDays((d) => d - 1)}
+                        title="Previous day"
+                      >
+                        <span className="icon">
+                          <i className="fa-solid fa-chevron-left" />
+                        </span>
+                      </button>
+                      <span className="button is-static is-small">{selectedDateLabel}</span>
+                      <button
+                        className="button is-small"
+                        onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
+                        disabled={offsetDays >= 0}
+                        title="Next day"
+                      >
+                        <span className="icon">
+                          <i className="fa-solid fa-chevron-right" />
+                        </span>
+                      </button>
+                    </div>
+                    {weather ? (
+                      <div className="mt-2">
+                        <p className="is-size-7 has-text-grey">{weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)</p>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Column 3: Navigation menu */}
+                  <div className="column is-12-mobile is-4-tablet has-text-centered">
+                    <div className="buttons is-centered">
                     <button
                       className={`button ${path === '/' ? 'is-primary' : 'is-light'}`}
                       title="Digest"
@@ -326,37 +358,6 @@ function App() {
                     </button>
                     </div>
                   </div>
-                </div>
-
-                {/* Centered date selector with weather underneath */}
-                <div className="has-text-centered mb-3">
-                  <div className="buttons is-centered">
-                    <button
-                      className="button is-small"
-                      onClick={() => setOffsetDays((d) => d - 1)}
-                      title="Previous day"
-                    >
-                      <span className="icon">
-                        <i className="fa-solid fa-chevron-left" />
-                      </span>
-                    </button>
-                    <span className="button is-static is-small">{selectedDateLabel}</span>
-                    <button
-                      className="button is-small"
-                      onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
-                      disabled={offsetDays >= 0}
-                      title="Next day"
-                    >
-                      <span className="icon">
-                        <i className="fa-solid fa-chevron-right" />
-                      </span>
-                    </button>
-                  </div>
-                  {weather ? (
-                    <div className="mt-2">
-                      <p className="is-size-7 has-text-grey">{weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)</p>
-                    </div>
-                  ) : null}
                 </div>
 
                 {/* Status messages */}

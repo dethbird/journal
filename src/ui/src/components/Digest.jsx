@@ -362,59 +362,47 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
   };
 
   return (
-    <div className="columns is-variable is-6 is-multiline">
-      <div className="column is-12-mobile is-6-desktop">
-        <div className="card">
-          <header className="card-header">
-            <p className="card-header-title">Journal</p>
-          </header>
-          <div className="card-content">
-            {logs && logs.length > 0 ? (
-              <div className="journal-logs">
-                {logs.map((log) => (
-                  <div key={log.id} className="mb-3">
-                    <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
-                    <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(log.content || '') }} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="has-text-grey">No journal content</p>
-            )}
+    <div className="columns is-multiline">
+      {logs && logs.length > 0 ? (
+        <div className="column is-12-mobile is-6-desktop">
+          <div className="box">
+            <p className="title is-5">Journal</p>
+            <div className="journal-logs">
+              {logs.map((log) => (
+                <div key={log.id} className="mb-3">
+                  <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
+                  <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(log.content || '') }} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
 
-      <div className="column is-12-mobile is-6-desktop">
-        <div className="card">
-          <header className="card-header">
-            <p className="card-header-title">Goals</p>
-          </header>
-          <div className="card-content">
-            {goals && goals.length > 0 ? (
-              <div className="goals-list">
-                {goals.map((goal) => (
-                  <div key={goal.id} className="is-flex is-align-items-center mb-2">
-                    <label className="checkbox is-flex is-align-items-center">
-                      <input
-                        type="checkbox"
-                        checked={goal.completed}
-                        onChange={() => onToggleGoal && onToggleGoal(goal.id, goal.completed)}
-                        className="mr-2"
-                      />
-                      <span className={goal.completed ? 'has-text-grey-light' : ''} style={goal.completed ? { textDecoration: 'line-through' } : {}}>
-                        {goal.text}
-                      </span>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="has-text-grey">No goals</p>
-            )}
+      {goals && goals.length > 0 ? (
+        <div className="column is-12-mobile is-6-desktop">
+          <div className="box">
+            <p className="title is-5">Goals</p>
+            <div className="goals-list">
+              {goals.map((goal) => (
+                <div key={goal.id} className="is-flex is-align-items-center mb-2">
+                  <label className="checkbox is-flex is-align-items-center">
+                    <input
+                      type="checkbox"
+                      checked={goal.completed}
+                      onChange={() => onToggleGoal && onToggleGoal(goal.id, goal.completed)}
+                      className="mr-2"
+                    />
+                    <span className={goal.completed ? 'has-text-grey-light' : ''} style={goal.completed ? { textDecoration: 'line-through' } : {}}>
+                      {goal.text}
+                    </span>
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 };
@@ -557,26 +545,12 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                 <div className="columns is-multiline">
                   {github ? (
                     <div className="column is-12-mobile is-6-desktop">
-                      <div className="card">
-                        <header className="card-header">
-                          <p className="card-header-title">GitHub</p>
-                        </header>
-                        <div className="card-content">
-                          <GithubSection section={github} inCard={true} />
-                        </div>
-                      </div>
+                      <GithubSection section={github} />
                     </div>
                   ) : null}
                   {trello ? (
                     <div className="column is-12-mobile is-6-desktop">
-                      <div className="card">
-                        <header className="card-header">
-                          <p className="card-header-title">Trello</p>
-                        </header>
-                        <div className="card-content">
-                          <TrelloSection section={trello} inCard={true} />
-                        </div>
-                      </div>
+                      <TrelloSection section={trello} />
                     </div>
                   ) : null}
                 </div>
@@ -586,26 +560,12 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                 <div className="columns is-multiline">
                   {music ? (
                     <div className="column is-12-mobile is-6-desktop">
-                      <div className="card">
-                        <header className="card-header">
-                          <p className="card-header-title">Spotify</p>
-                        </header>
-                        <div className="card-content">
-                          <MusicSection section={music} inCard={true} />
-                        </div>
-                      </div>
+                      <MusicSection section={music} />
                     </div>
                   ) : null}
                   {timeline ? (
                     <div className="column is-12-mobile is-6-desktop">
-                      <div className="card">
-                        <header className="card-header">
-                          <p className="card-header-title">Timeline</p>
-                        </header>
-                        <div className="card-content">
-                          <TimelineSection section={timeline} inCard={true} />
-                        </div>
-                      </div>
+                      <TimelineSection section={timeline} />
                     </div>
                   ) : null}
                 </div>
