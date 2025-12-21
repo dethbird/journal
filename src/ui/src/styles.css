@@ -131,3 +131,11 @@ ul {
   padding: 0;
 }
 
+/* Reusable small icon style used in section headers */
+.section-icon {
+  width: 2.5em;
+  height: 2.5em;
+  margin-right: 0.25em;
+  vertical-align: middle;
+}
+

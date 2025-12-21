@@ -1,4 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import trelloIcon from '../assets/trello.ico';
+import githubIcon from '../assets/github.ico';
+import goalsIcon from '../assets/goals.ico';
+import spotifyIcon from '../assets/spotify.ico';
+import timelineIcon from '../assets/timeline.ico';
+import journalIcon from '../assets/journal.ico';
+import bookmarksIcon from '../assets/bookmarks.ico';
 import { marked } from 'marked';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -100,7 +107,10 @@ const GithubSection = ({ section, inCard = false }) => {
 
   return (
     <div className="box">
-      <p className="title is-5">GitHub</p>
+      <p className="title is-5">
+        <img src={githubIcon} alt="GitHub" className="section-icon" />
+        GitHub
+      </p>
       {content}
     </div>
   );
@@ -110,7 +120,10 @@ const BookmarkSection = ({ section }) => {
   if (!section) return null;
   return (
     <div className="box">
-      <p className="title is-5">Bookmarks ({section.count ?? 0})</p>
+      <p className="title is-5">
+        <img src={bookmarksIcon} alt="Bookmarks" className="section-icon" />
+        Bookmarks ({section.count ?? 0})
+      </p>
       {section.items?.length ? (
         section.items.map((item) => (
           <div key={item.url} className="mb-3 is-flex">
@@ -203,7 +216,10 @@ const MusicSection = ({ section, inCard = false }) => {
 
   return (
     <div className="box">
-      <p className="title is-5">Spotify</p>
+      <p className="title is-5">
+        <img src={spotifyIcon} alt="Spotify" className="section-icon" />
+        Spotify
+      </p>
       {content}
     </div>
   );
@@ -264,7 +280,10 @@ const TimelineSection = ({ section, inCard = false }) => {
 
   return (
     <div className="box">
-      <p className="title is-5">Timeline</p>
+      <p className="title is-5">
+        <img src={timelineIcon} alt="Timeline" className="section-icon" />
+        Timeline
+      </p>
       {content}
     </div>
   );
@@ -343,7 +362,10 @@ const TrelloSection = ({ section, inCard = false }) => {
 
   return (
     <div className="box">
-      <p className="title is-5">Trello</p>
+      <p className="title is-5">
+        <img src={trelloIcon} alt="Trello" className="section-icon" />
+        Trello
+      </p>
       {content}
     </div>
   );
@@ -366,7 +388,10 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
       {logs && logs.length > 0 ? (
         <div className="column is-12-mobile is-6-desktop">
           <div className="box">
-            <p className="title is-5">Journal</p>
+              <p className="title is-5">
+                <img src={journalIcon} alt="Journal" className="section-icon" />
+                Journal
+              </p>
             <div className="journal-logs">
               {logs.map((log) => (
                 <div key={log.id} className="mb-3">
@@ -382,7 +407,10 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
       {goals && goals.length > 0 ? (
         <div className="column is-12-mobile is-6-desktop">
           <div className="box">
-            <p className="title is-5">Goals</p>
+            <p className="title is-5">
+              <img src={goalsIcon} alt="Goals" className="section-icon" />
+              Goals
+            </p>
             <div className="goals-list">
               {goals.map((goal) => (
                 <div key={goal.id} className="is-flex is-align-items-center mb-2">
