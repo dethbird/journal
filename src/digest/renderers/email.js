@@ -67,8 +67,8 @@ const renderMusic = (section) => {
     .map(
       (play) => `
         <div class="card play">
-          ${play.albumImage ? `<div class="thumb"><img src="${escapeHtml(play.albumImage)}" alt=""/></div>` : ''}
-          <div class="title">${escapeHtml(play.trackName)}${play.artists?.length ? ` <span class="muted">by ${escapeHtml(play.artists.join(', '))}</span>` : ''}</div>
+          ${play.albumImage ? `<div class="thumb">${play.uri ? `<a href="${escapeHtml(play.uri)}">` : ''}<img src="${escapeHtml(play.albumImage)}" alt=""/>${play.uri ? `</a>` : ''}</div>` : ''}
+          <div class="title">${play.uri ? `<a href="${escapeHtml(play.uri)}">${escapeHtml(play.trackName)}</a>` : escapeHtml(play.trackName)}${play.artists?.length ? ` <span class="muted">by ${escapeHtml(play.artists.join(', '))}</span>` : ''}</div>
           ${play.playedAt ? `<div class="meta">${escapeHtml(play.playedAt)}</div>` : ''}
         </div>
       `

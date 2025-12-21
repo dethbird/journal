@@ -243,9 +243,10 @@ function App() {
                     </button>
                     <span className="mx-2" />
                     <button
-                      className="button is-light"
+                      className={`button ${path === '/' ? 'is-primary' : 'is-light'}`}
                       title="Digest"
                       aria-label="Digest"
+                      aria-pressed={path === '/'}
                       onClick={(e) => {
                         e.preventDefault();
                         window.history.pushState({}, '', '/');
@@ -257,9 +258,10 @@ function App() {
                       </span>
                     </button>
                     <button
-                      className="button is-light"
+                      className={`button ${path === '/journal' ? 'is-primary' : 'is-light'}`}
                       title="Journal"
                       aria-label="Journal"
+                      aria-pressed={path === '/journal'}
                       onClick={(e) => {
                         e.preventDefault();
                         window.history.pushState({}, '', '/journal');
@@ -296,13 +298,14 @@ function App() {
                     </button>
                     <a
                       href="/settings"
-                      className="button is-light"
+                      className={`button ${path === '/settings' ? 'is-primary' : 'is-light'}`}
                       onClick={(e) => {
                         e.preventDefault();
                         window.history.pushState({}, '', '/settings');
                         setPath('/settings');
                       }}
                       title="Settings"
+                      aria-pressed={path === '/settings'}
                     >
                       <span className="icon">
                         <i className="fa-solid fa-cog" />

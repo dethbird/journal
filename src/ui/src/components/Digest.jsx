@@ -168,7 +168,13 @@ const MusicSection = ({ section }) => {
               ) : null}
               <div>
                 <p className="has-text-weight-semibold">
-                  {play.trackName}
+                  {play.uri ? (
+                    <a href={play.uri} className="has-text-weight-semibold" target="_blank" rel="noreferrer">
+                      {play.trackName}
+                    </a>
+                  ) : (
+                    play.trackName
+                  )}
                   {play.artists?.length ? <span className="has-text-grey"> — {play.artists.join(', ')}</span> : null}
                 </p>
                 {play.playedAt ? (

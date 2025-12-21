@@ -59,6 +59,7 @@ export const buildSpotifySection = (events) => {
       albumImage: payload.album?.imageUrl ?? null,
       playedAt: occurredAt ? occurredAt.toISOString() : null,
       url: track.externalUrl ?? track.external_urls?.spotify ?? null,
+      uri: track.uri ?? (track.id ? `spotify:track:${track.id}` : null),
     });
   }
 
