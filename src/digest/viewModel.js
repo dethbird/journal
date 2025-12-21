@@ -3,6 +3,7 @@ import buildGithubSection from './sections/github.js';
 import buildBookmarksSection from './sections/bookmarks.js';
 import buildSpotifySection from './sections/spotify.js';
 import buildTimelineSection from './sections/timeline.js';
+import buildTrelloSection from './sections/trello.js';
 
 const DEFAULT_RANGE_HOURS = Number(process.env.DIGEST_RANGE_HOURS ?? 24);
 
@@ -46,6 +47,10 @@ export const buildDigestViewModel = async ({ since = null, until = null, userId 
   }
   if (grouped.has('google_timeline')) {
     const section = buildTimelineSection(grouped.get('google_timeline'));
+    if (section) sections.push(section);
+  }
+  if (grouped.has('trello')) {
+    const section = buildTrelloSection(grouped.get('trello'));
     if (section) sections.push(section);
   }
 

@@ -126,6 +126,53 @@ const renderTimeline = (section) => {
   `;
 };
 
+const renderTrello = (section) => {
+  const summary = section.summary ?? {};
+  const summaryParts = [`${summary.totalCardsMoved ?? 0} cards moved`, `${summary.totalCardsCreated ?? 0} created`];
+  if (summary.boardCount) summaryParts.push(`${summary.boardCount} boards`);
+
+  const boards = (section.boards ?? [])
+    .map((board) => {
+      const cards = (board.cards ?? [])
+        .map((card) => {
+          const cardLink = card.url
+            ? `<a href="${escapeHtml(card.url)}">${escapeHtml(card.name)}</a>`
+            : escapeHtml(card.name);
+          const listInfo = card.isNew
+            ? ' <span class="tag-new">new</span>'
+            : card.listBefore
+            ? ` <span class="muted">${escapeHtml(card.listBefore)} → ${escapeHtml(card.listName)}</span>`
+            : ` <span class="tag-list">${escapeHtml(card.listName)}</span>`;
+          const meta = [];
+          if (card.occurredAt) {
+            meta.push(new Date(card.occurredAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }));
+          }
+          if (card.member) meta.push(card.member);
+          return `
+            <div class="card-item">
+              <div>${cardLink}${listInfo}</div>
+              ${meta.length ? `<div class="meta">${escapeHtml(meta.join(' · '))}</div>` : ''}
+            </div>
+          `;
+        })
+        .join('');
+
+      return `
+        <div class="card trello-board">
+          <div class="title">${escapeHtml(board.name)} <span class="muted">(${board.actionCount} actions)</span></div>
+          ${cards}
+        </div>
+      `;
+    })
+    .join('');
+
+  return `
+    <h3>Trello</h3>
+    <div class="summary">${escapeHtml(summaryParts.join(' · '))}</div>
+    <div class="cards">${boards || '<div class="muted">No Trello activity</div>'}</div>
+  `;
+};
+
 const baseStyle = `
   body { font-family: Arial, sans-serif; background: #f7f7f9; color: #1f2933; margin: 0; padding: 24px; }
   .wrapper { max-width: 640px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; }
@@ -135,6 +182,7 @@ const baseStyle = `
   h3 { margin: 16px 0 8px 0; font-size: 18px; }
   .cards { display: block; }
   .card { padding: 12px; border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 10px; background: #fafafa; }
+  .card-item { padding: 4px 0; }
   .title { font-weight: 600; margin-bottom: 4px; }
   .meta { color: #6b7280; font-size: 12px; margin-bottom: 4px; }
   .summary { margin: 8px 0; font-weight: 600; }
@@ -144,6 +192,8 @@ const baseStyle = `
   .excerpt { color: #374151; font-size: 14px; margin-top: 4px; }
   a { color: #2563eb; text-decoration: none; }
   a:hover { text-decoration: underline; }
+  .tag-new { background: #d1fae5; color: #065f46; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
+  .tag-list { background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 4px; font-size: 11px; }
 `;
 
 const formatDate = (iso) => {
@@ -168,6 +218,7 @@ export const renderEmailBaseHtml = (vm) => {
       if (section.kind === 'bookmarks') return renderBookmarks(section);
       if (section.kind === 'music') return renderMusic(section);
       if (section.kind === 'timeline') return renderTimeline(section);
+      if (section.kind === 'trello') return renderTrello(section);
       return '';
     })
     .join('\n');

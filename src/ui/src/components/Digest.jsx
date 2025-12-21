@@ -238,6 +238,77 @@ const TimelineSection = ({ section }) => {
   );
 };
 
+const TrelloSection = ({ section }) => {
+  if (!section) return null;
+  const summary = section.summary ?? {};
+
+  const formatCardTime = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch (e) {
+      return iso;
+    }
+  };
+
+  return (
+    <div className="box">
+      <p className="title is-5">Trello</p>
+      <p className="is-size-6">
+        {summary.totalCardsMoved ?? 0} cards moved · {summary.totalCardsCreated ?? 0} created
+        {summary.boardCount ? ` · ${summary.boardCount} boards` : ''}
+      </p>
+
+      <div className="mt-3">
+        {section.boards?.length ? (
+          section.boards.map((board) => (
+            <div key={board.id} className="mb-4">
+              <p className="has-text-weight-semibold">
+                {board.name}
+                <span className="has-text-grey is-size-7 ml-2">({board.actionCount} actions)</span>
+              </p>
+              {board.cards?.length ? (
+                <div className="ml-3 mt-2">
+                  {board.cards.map((card, idx) => (
+                    <div key={card.id || idx} className="mb-2">
+                      <p>
+                        {card.url ? (
+                          <a href={card.url} target="_blank" rel="noreferrer" className="has-text-weight-medium">
+                            {card.name}
+                          </a>
+                        ) : (
+                          <span className="has-text-weight-medium">{card.name}</span>
+                        )}
+                        {card.isNew ? (
+                          <span className="tag is-success is-light ml-2">new</span>
+                        ) : card.listBefore ? (
+                          <span className="has-text-grey is-size-7 ml-2">
+                            {card.listBefore} → {card.listName}
+                          </span>
+                        ) : (
+                          <span className="tag is-info is-light ml-2">{card.listName}</span>
+                        )}
+                      </p>
+                      {card.occurredAt || card.member ? (
+                        <p className="is-size-7 has-text-grey">
+                          {card.occurredAt ? formatCardTime(card.occurredAt) : null}
+                          {card.member ? ` · ${card.member}` : null}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ))
+        ) : (
+          <p className="has-text-grey">No Trello activity</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const JournalSection = ({ logs, goals, onToggleGoal }) => {
   if ((!logs || logs.length === 0) && (!goals || goals.length === 0)) return null;
 
@@ -463,6 +534,7 @@ export default function Digest({ offsetDays = 0 }) {
         if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} />;
         if (section.kind === 'music') return <MusicSection key={`s-${idx}`} section={section} />;
         if (section.kind === 'timeline') return <TimelineSection key={`s-${idx}`} section={section} />;
+        if (section.kind === 'trello') return <TrelloSection key={`s-${idx}`} section={section} />;
         return null;
       })}
     </div>

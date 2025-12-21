@@ -90,6 +90,7 @@ model User {
   collectorRuns     CollectorRun[]
   goals             Goal[]
   journalLogs       JournalLog[]
+  trelloSettings    TrelloSettings?
 }
 
 model JournalEntry {
@@ -256,4 +257,17 @@ model Goal {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId, date])
+}
+
+model TrelloSettings {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  memberId         String?  // Trello member/user ID (e.g. "dethbird")
+  trackedBoardIds  String[] // Array of board IDs to track
+  trackedListNames String[] // List names to track (e.g. ["Done", "Doing", "Applied"])
+  enabled          Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
 }

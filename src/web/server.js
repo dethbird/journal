@@ -1206,6 +1206,101 @@ app.post('/api/google-timeline/settings', async (request, reply) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Trello Settings API
+// ─────────────────────────────────────────────────────────────────────────────
+
+const trelloConfig = {
+  apiKey: process.env.TRELLO_API_KEY,
+  token: process.env.TRELLO_TOKEN,
+};
+
+const serializeTrelloSettings = (settings) => {
+  if (!settings) return null;
+  return {
+    memberId: settings.memberId,
+    trackedBoardIds: settings.trackedBoardIds || [],
+    trackedListNames: settings.trackedListNames || [],
+    enabled: settings.enabled,
+  };
+};
+
+/**
+ * GET /api/trello/settings
+ * Fetch Trello settings for the current user
+ */
+app.get('/api/trello/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const settings = await prisma.trelloSettings.findUnique({ where: { userId: user.id } });
+  return {
+    settings: serializeTrelloSettings(settings) || { memberId: null, trackedBoardIds: [], trackedListNames: ['Done', 'Doing', 'Applied'], enabled: true },
+    configured: !!(trelloConfig.apiKey && trelloConfig.token),
+  };
+});
+
+/**
+ * POST /api/trello/settings
+ * Update Trello settings for the current user
+ */
+app.post('/api/trello/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { memberId, trackedBoardIds, trackedListNames, enabled } = request.body ?? {};
+
+  const settings = await prisma.trelloSettings.upsert({
+    where: { userId: user.id },
+    update: {
+      memberId: memberId || null,
+      trackedBoardIds: trackedBoardIds || [],
+      trackedListNames: trackedListNames || [],
+      enabled: enabled == null ? true : !!enabled,
+    },
+    create: {
+      userId: user.id,
+      memberId: memberId || null,
+      trackedBoardIds: trackedBoardIds || [],
+      trackedListNames: trackedListNames || [],
+      enabled: enabled == null ? true : !!enabled,
+    },
+  });
+
+  return { settings: serializeTrelloSettings(settings) };
+});
+
+/**
+ * GET /api/trello/boards
+ * Fetch boards from Trello API for board selection
+ */
+app.get('/api/trello/boards', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  if (!trelloConfig.apiKey || !trelloConfig.token) {
+    return reply.status(503).send({ error: 'Trello API not configured. Add TRELLO_API_KEY and TRELLO_TOKEN to .env' });
+  }
+
+  const settings = await prisma.trelloSettings.findUnique({ where: { userId: user.id } });
+  const memberId = settings?.memberId || 'me';
+
+  try {
+    const res = await fetch(`https://api.trello.com/1/members/${memberId}/boards?fields=name,url,closed&key=${trelloConfig.apiKey}&token=${trelloConfig.token}`);
+    if (!res.ok) {
+      const text = await res.text();
+      return reply.status(res.status).send({ error: `Trello API error: ${text}` });
+    }
+    const boards = await res.json();
+    // Filter out closed boards
+    const openBoards = boards.filter((b) => !b.closed);
+    return { boards: openBoards };
+  } catch (err) {
+    request.log.error(err, 'Failed to fetch Trello boards');
+    return reply.status(500).send({ error: 'Failed to fetch boards from Trello' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Journal Entry API
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ import './sources/github.js';
 import './sources/emailBookmarks.js';
 import './sources/spotify.js';
 import './sources/timeline.js';
+import './sources/trello.js';
 import { runCollectorCycle } from './runner.js';
 
 const entryFile = fileURLToPath(import.meta.url);

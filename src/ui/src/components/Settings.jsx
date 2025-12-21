@@ -553,6 +553,210 @@ function GoogleTimelineSettingsForm({ connected, googleClientId }) {
   );
 }
 
+function TrelloSettingsForm() {
+  const [state, setState] = useState({
+    loading: true,
+    saving: false,
+    loadingBoards: false,
+    configured: false,
+    memberId: '',
+    trackedBoardIds: [],
+    trackedListNames: ['Done', 'Doing', 'Applied'],
+    enabled: true,
+    boards: [],
+    message: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/trello/settings', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setState((prev) => ({
+            ...prev,
+            loading: false,
+            configured: data.configured,
+            memberId: data.settings?.memberId || '',
+            trackedBoardIds: data.settings?.trackedBoardIds || [],
+            trackedListNames: data.settings?.trackedListNames?.length ? data.settings.trackedListNames : ['Done', 'Doing', 'Applied'],
+            enabled: data.settings?.enabled ?? true,
+          }));
+        } else {
+          setState((prev) => ({ ...prev, loading: false }));
+        }
+      } catch (e) {
+        setState((prev) => ({ ...prev, loading: false, error: e.message }));
+      }
+    };
+    load();
+  }, []);
+
+  const handleFetchBoards = async () => {
+    setState((prev) => ({ ...prev, loadingBoards: true, error: null }));
+    try {
+      const res = await fetch('/api/trello/boards', { credentials: 'include' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Failed to fetch boards (${res.status})`);
+      }
+      const data = await res.json();
+      setState((prev) => ({ ...prev, loadingBoards: false, boards: data.boards || [] }));
+    } catch (err) {
+      setState((prev) => ({ ...prev, loadingBoards: false, error: err.message }));
+    }
+  };
+
+  const handleToggleBoard = (boardId) => {
+    setState((prev) => {
+      const tracked = prev.trackedBoardIds.includes(boardId)
+        ? prev.trackedBoardIds.filter((id) => id !== boardId)
+        : [...prev.trackedBoardIds, boardId];
+      return { ...prev, trackedBoardIds: tracked };
+    });
+  };
+
+  const handleListNamesChange = (e) => {
+    const names = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+    setState((prev) => ({ ...prev, trackedListNames: names }));
+  };
+
+  const handleSave = async () => {
+    setState((prev) => ({ ...prev, saving: true, message: null, error: null }));
+    try {
+      const res = await fetch('/api/trello/settings', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberId: state.memberId || null,
+          trackedBoardIds: state.trackedBoardIds,
+          trackedListNames: state.trackedListNames,
+          enabled: state.enabled,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Save failed (${res.status})`);
+      }
+      setState((prev) => ({ ...prev, saving: false, message: 'Saved' }));
+      setTimeout(() => setState((prev) => ({ ...prev, message: null })), 2500);
+    } catch (err) {
+      setState((prev) => ({ ...prev, saving: false, error: err.message }));
+    }
+  };
+
+  if (state.loading) return <p className="subtitle">Loading Trello settings…</p>;
+
+  return (
+    <div className="box mt-4">
+      <p className="is-size-5 has-text-weight-semibold">Trello integration</p>
+      {!state.configured && (
+        <p className="help is-warning mt-2">
+          Add TRELLO_API_KEY and TRELLO_TOKEN to your .env file to enable Trello integration.
+          <br />
+          <a href="https://trello.com/power-ups/admin" target="_blank" rel="noreferrer">
+            Get your API key here
+          </a>
+        </p>
+      )}
+
+      <div className="mt-3">
+        <div className="field">
+          <label className="label">Trello Member ID (optional)</label>
+          <div className="control">
+            <input
+              type="text"
+              className="input"
+              value={state.memberId}
+              onChange={(e) => setState((prev) => ({ ...prev, memberId: e.target.value }))}
+              placeholder="e.g. dethbird (leave blank for 'me')"
+            />
+          </div>
+          <p className="help">Your Trello username or member ID. Leave blank to use the authenticated user.</p>
+        </div>
+
+        <div className="field mt-3">
+          <label className="label">Tracked list names</label>
+          <div className="control">
+            <input
+              type="text"
+              className="input"
+              value={state.trackedListNames.join(', ')}
+              onChange={handleListNamesChange}
+              placeholder="Done, Doing, Applied"
+            />
+          </div>
+          <p className="help">Comma-separated list of column/list names to track card movements into.</p>
+        </div>
+
+        <div className="field mt-3">
+          <label className="label">Tracked boards</label>
+          <div className="control">
+            <button
+              type="button"
+              className={`button is-info is-small${state.loadingBoards ? ' is-loading' : ''}`}
+              onClick={handleFetchBoards}
+              disabled={!state.configured || state.loadingBoards}
+            >
+              <span className="icon">
+                <i className="fa-solid fa-rotate" />
+              </span>
+              <span>Fetch boards from Trello</span>
+            </button>
+          </div>
+          {state.boards.length > 0 && (
+            <div className="mt-2">
+              {state.boards.map((board) => (
+                <div key={board.id} className="is-flex is-align-items-center mb-1">
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      checked={state.trackedBoardIds.includes(board.id)}
+                      onChange={() => handleToggleBoard(board.id)}
+                      className="mr-2"
+                    />
+                    <a href={board.url} target="_blank" rel="noreferrer">{board.name}</a>
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+          {state.trackedBoardIds.length > 0 && state.boards.length === 0 && (
+            <p className="help has-text-grey mt-1">{state.trackedBoardIds.length} board(s) selected</p>
+          )}
+        </div>
+
+        <div className="field mt-3">
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={state.enabled}
+              onChange={(e) => setState((prev) => ({ ...prev, enabled: e.target.checked }))}
+            />{' '}
+            Enable Trello collector
+          </label>
+        </div>
+
+        <div className="field is-grouped mt-4">
+          <div className="control">
+            <button
+              type="button"
+              className={`button is-primary${state.saving ? ' is-loading' : ''}`}
+              onClick={handleSave}
+            >
+              Save
+            </button>
+          </div>
+          {state.message && <p className="help is-success">{state.message}</p>}
+          {state.error && <p className="help is-danger">{state.error}</p>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Settings({ user, onDisconnect }) {
   const connectedAccounts = user?.connectedAccounts || [];
   const googleConnected = connectedAccounts.some((acc) => acc.provider === 'google');
@@ -598,6 +802,7 @@ export default function Settings({ user, onDisconnect }) {
       </div>
 
       <GoogleTimelineSettingsForm connected={googleConnected} googleClientId={googleClientId} />
+      <TrelloSettingsForm />
       <EmailDeliverySettingsForm />
       <EmailBookmarkSettingsForm />
     </div>

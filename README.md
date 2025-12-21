@@ -19,6 +19,9 @@ Lightweight personal journal, timeline ingestors, and daily digest renderer. Sto
 - Account credentials for integrations you plan to use:
    - IMAP/SMTP (email ingest)
    - Google OAuth credentials (Drive access) or service account with Drive API access
+   - GitHub OAuth app (for GitHub activity collection)
+   - Spotify OAuth app (for recently played tracks)
+   - Trello API key and token (for board activity collection)
 
 ## Quick Start — Development
 
@@ -63,6 +66,18 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REFRESH_TOKEN=...  # optional if using a long-lived token
 
+# GitHub OAuth (for GitHub activity collection)
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+
+# Spotify OAuth (for recently played tracks)
+SPOTIFY_CLIENT_ID=...
+SPOTIFY_CLIENT_SECRET=...
+
+# Trello API (for board activity collection)
+TRELLO_API_KEY=...
+TRELLO_TOKEN=...
+
 # IMAP (email ingest - can also be configured per-user in Settings UI)
 IMAP_HOST=imap.example.com
 IMAP_PORT=993
@@ -90,11 +105,47 @@ node src/web/server.js
 
 6. Running collectors
 
-
 ```bash
 # run a collector runner (depends on local scripts)
 node src/collector/run.js
 ```
+
+7. Generate and view digest
+
+```bash
+# Generate text digest for last 24 hours
+npm run digest:run
+
+# Generate digest for custom time range (e.g., 7 days)
+DIGEST_RANGE_HOURS=168 node src/digest/run.js
+
+# Generate HTML digest file
+DIGEST_RANGE_HOURS=168 node scripts/print-digest-html.js
+# Output: tmp/digest.html
+```
+
+### Developing on a Remote VM (SSH Tunneling)
+
+If you're running the app on a remote VM/VPS and want to access the UI from your local browser, use SSH port forwarding:
+
+```bash
+# Forward local port 5001 to remote port 4001 (or whatever PORT you set)
+ssh -N -L 5001:localhost:4001 code@journal
+```
+
+Then open `http://localhost:5001` in your local browser. The `-N` flag prevents executing a remote command (tunnel only).
+
+**Tips:**
+- Use `-f` to run the tunnel in the background: `ssh -N -f -L 5001:localhost:4001 code@journal`
+- For multiple tunnels (e.g., database access), add more `-L` flags: `ssh -N -L 5001:localhost:4001 -L 5432:localhost:5432 code@journal`
+- Add an entry to `~/.ssh/config` for convenience:
+  ```
+  Host journal
+    HostName your-server-ip
+    User code
+    LocalForward 5001 localhost:4001
+  ```
+  Then just run: `ssh -N journal`
 
 ## Scheduled Jobs (Systemd / Cron)
 
@@ -227,34 +278,110 @@ node scripts/send-digest-email.js
 
 ## User Setup (Integration details)
 
-- IMAP/SMTP
+### IMAP/SMTP Email Bookmarks
    - Provide IMAP host/port/user/pass in environment or account settings.
    - Configure the email ingest source to mark messages as processed (MOVE/DELETE/MARK_SEEN) according to your preference.
+   - Connect via Settings UI to configure per-account email bookmark settings.
 
-- Google Drive (Timeline JSON)
+### Google Drive (Timeline JSON)
    - The timeline collector looks for the most recent file with a configured filename (default `Timeline.json`) inside a selected Drive folder.
    - Provide OAuth credentials (client id/secret) and a refresh token or service account credentials with Drive access.
    - Use the UI Picker (in the web app) to select the Drive folder — the app will store the folder id in account settings.
+   - Timeline filename: Default filename is `Timeline.json`. The UI/account settings allow changing that filename per account.
 
-- Timeline filename
-   - Default filename is `Timeline.json`. The UI/account settings allow changing that filename per account.
+### GitHub
+   1. Create a GitHub OAuth App:
+      - Go to https://github.com/settings/developers
+      - Click "New OAuth App"
+      - Application name: `Evidence Journal` (or your preferred name)
+      - Homepage URL: `http://localhost:4001` (or your production URL)
+      - Authorization callback URL: `http://localhost:4001/auth/github/callback` (adjust for production)
+   2. Copy the Client ID and Client Secret to your `.env`:
+      ```
+      GITHUB_CLIENT_ID=your_client_id
+      GITHUB_CLIENT_SECRET=your_client_secret
+      ```
+   3. Connect GitHub via the Settings UI in the web app.
+   4. The collector will automatically fetch your commits, PRs, and other activity.
+
+### Spotify
+   1. Create a Spotify App:
+      - Go to https://developer.spotify.com/dashboard
+      - Click "Create app"
+      - App name: `Evidence Journal` (or your preferred name)
+      - Redirect URI: `http://localhost:4001/auth/spotify/callback` (adjust for production)
+      - Check "Web API" and accept terms
+   2. Copy the Client ID and Client Secret to your `.env`:
+      ```
+      SPOTIFY_CLIENT_ID=your_client_id
+      SPOTIFY_CLIENT_SECRET=your_client_secret
+      ```
+   3. Connect Spotify via the Settings UI in the web app.
+   4. The collector will automatically fetch your recently played tracks.
+
+### Trello
+   1. Get your Trello API Key:
+      - Go to https://trello.com/power-ups/admin
+      - Copy your API Key
+   2. Generate a Token:
+      - Click the "Token" link or visit: `https://trello.com/1/authorize?expiration=never&name=Evidence+Journal&scope=read&response_type=token&key=YOUR_API_KEY`
+      - Replace `YOUR_API_KEY` with your actual API key
+      - Authorize the app and copy the token
+   3. Add to your `.env`:
+      ```
+      TRELLO_API_KEY=your_api_key
+      TRELLO_TOKEN=your_token
+      ```
+   4. Configure Trello in the Settings UI:
+      - Enter your Trello member ID (username or member ID from Trello)
+      - Click "Fetch boards from Trello" to load your boards
+      - Select which boards to track
+      - Specify list names to track (e.g., "Done", "Doing", "Applied")
+      - Enable tracking and save
+   5. The collector will fetch card movements and creations into tracked lists across your selected boards.
+   
+   **Note:** Trello settings are per-user, but the API key/token are global. Each user can track different boards.
 
 ## Database Notes
 
-- Schema: Prisma schema is located in `prisma/schema.prisma`. Daily journal entries are stored in `JournalEntry` (content, optional `goals`, timestamps).
-- Frontmatter: `mood`, `energy`, and `tags` are stored in the markdown frontmatter of the `content` column; `goals` is a separate column (markdown string).
+- Schema: Prisma schema is located in `prisma/schema.prisma`.
+- Journal data:
+  - `JournalLog`: Multiple log entries per day with markdown content
+  - `Goal`: Daily goals/todos with checkbox completion tracking
+  - `JournalEntry`: Legacy single-entry-per-day model (deprecated)
+- Events: All collected activity (GitHub, Spotify, Trello, email bookmarks, timeline) stored in `Event` table with `source`, `eventType`, `payload`, and `occurredAt`
+- Cursors: Each collector maintains cursor state in the `Cursor` table (per-source or per-connected-account)
+- Settings: User-specific integration settings stored in:
+  - `TrelloSettings`: per-user Trello board tracking configuration
+  - `EmailBookmarkSettings`: per-account IMAP configuration
+  - `GoogleTimelineSettings`: per-account Drive folder and file settings
 
 ## Development Tips
 
-- Auto-save: The journal editor auto-saves content (debounced) and saves `goals` as well — useful when testing editor behavior.
+- Auto-save: The journal editor auto-saves content (debounced).
 - When changing Prisma schema, run `npx prisma db push` then `npx prisma generate` to refresh the client.
 - If the UI build fails during development, fix the component errors and re-run `npm run ui:build`. The app uses Vite for fast builds.
+- **Collectors**: Each source registers via `src/collector/registry.js`. Add new collectors in `src/collector/sources/`.
+- **Digest sections**: Each event source can have a digest builder in `src/digest/sections/` that transforms events into UI-friendly summaries.
+- **Email rendering**: Digest email templates are in `src/digest/renderers/email.js` with inline CSS styling.
+
+## Available Collectors
+
+- **GitHub**: Commits, PRs, issues (requires OAuth connection)
+- **Spotify**: Recently played tracks (requires OAuth connection)
+- **Trello**: Card movements and creations in tracked boards/lists (requires API key/token + per-user settings)
+- **Email Bookmarks**: Links extracted from IMAP mailbox (requires per-account IMAP settings)
+- **Google Timeline**: Location timeline from Drive JSON export (requires OAuth connection + Drive folder selection)
 
 ## Philosophy
 
-This project favors minimal, composable components and simple data models. The journal content is the source of truth: structured metadata (mood/energy/tags) is kept in a small frontmatter block inside the markdown so entries remain portable, while day-specific fields that are more UI-oriented (like `goals`) are stored as dedicated columns for fast access in digests and lists.
+This project favors minimal, composable components and simple data models. Journal entries are structured as:
+- **JournalLog**: Multiple timestamped log entries per day (markdown content)
+- **Goal**: Simple daily goals with checkbox completion
 
-Collectors are designed to be simple, resilient sync processes: prefer idempotence, process safety (marking messages or files after ingest), and small retries rather than complex state machines.
+Collectors are designed to be simple, resilient sync processes: prefer idempotence, process safety (marking messages or files after ingest), and small retries rather than complex state machines. Each collector stores a cursor to track where it left off, enabling incremental syncs.
+
+The digest system transforms raw events into daily summaries with section builders (GitHub, Spotify, Trello, etc.) that can be rendered as text or HTML email.
 
 The UI is intentionally lightweight — a focused experience for quickly writing and reviewing entries, with progressive enhancement for collectors and integrations.
 
@@ -404,92 +531,11 @@ npm run pm2:logs
 sudo journalctl -u evidence-journal.service -f
 ```
 
-If you'd like, I can also add a short `DEPLOY.md` with copy-paste commands tailored to your VPS (including exact `ServerName` substitutions) or generate the Apache vhost file for your subdomain now. Tell me the subdomain(s) and whether you want PM2 or systemd and I'll produce exact files and commands.
-
-# Evidence Journal
-
-A Fastify API + React UI monolith that collects personal activity events, stores them in Postgres via Prisma, and can produce digest-friendly data while also serving a SPA frontend.
-
-## Current capabilities
-```markdown
-# Evidence Journal
-
-A Fastify monolith that collects personal activity events, serves a React SPA, and stores data in Postgres via Prisma. The project supports per-user connected accounts, per-account collector cursors, and per-account Email Bookmark settings.
-
-## What’s changed (recent)
-
-- Email bookmark IMAP settings were moved from global env vars into per-account `EmailBookmarkSettings` stored in the DB and managed via the Settings UI.
-- Collectors may expose a per-account function (`collectForAccount(account)`); the runner will call those per connected account. Legacy global collectors still work.
-- Cursors are scoped by `connectedAccountId` in the `Cursor` table so different users do not share cursor state.
-
-## Current capabilities
-
-- Fastify server in `src/web/server.js`:
-  - Hosts the Vite-built React app (`src/ui`).
-   - API endpoints for days and events, plus OAuth callbacks for GitHub and Spotify.
-- Prisma models include `User`, `ConnectedAccount`, `OAuthToken`, `Event` (with `userId`), `Cursor` (scoped to `connectedAccountId`), and `EmailBookmarkSettings`.
-- Collector runner persists events and cursor state to Postgres and supports per-account collectors.
-- GitHub collector (`src/collector/sources/github.js`) uses stored OAuth tokens per connected account and stamps events with `userId`.
-- Email bookmarks collector (`src/collector/sources/emailBookmarks.js`) reads IMAP settings per connected account, extracts links into `BookmarkEvent`s, moves processed messages, and stores per-account UID cursors.
-
-## Setup
-
-1. Copy `.env.example` to `.env` and fill in essential secrets (Postgres URL, OAuth client IDs/secrets):
-   ```bash
-   cp .env.example .env
-   npm install
-   ```
-2. Build the UI (optional for production build):
-   ```bash
-   npm run ui:build
-   ```
-3. Start the server:
-   ```bash
-   npm start
-   ```
-4. Run collectors manually for testing:
-   ```bash
-   npm run collector:run
-   ```
-
-Useful dev scripts:
-```bash
-npm run reset-events    # clear event-related tables
-npm run reset-cursor    # reset cursors
-npm run collector:run   # run collectors once
-```
-
-## Email Bookmark Settings (per-user)
-
-- The global `EMAIL_BOOKMARK_*` env vars are deprecated for per-user collection. Configure IMAP host/port/username/password/mailbox per `ConnectedAccount` using the Settings UI at `/settings` or the API endpoints `/api/email-bookmark/settings`.
-- The collector uses a per-account numeric UID cursor (stored in `Cursor` with `connectedAccountId`) and will fetch unseen mail when no cursor exists.
-
-## Collectors and how to add new ones
-
-- Register a collector with `registerCollector({ source, collect, collectForAccount })` in `src/collector/registry.js`.
-  - `collect(cursor)` is the legacy global collector signature.
-  - `collectForAccount(account)` is the newer per-account signature; the runner will call it for each active connected account for that source.
-- Existing collectors: `github`, `spotify` (recently played), and `email_bookmarks` all expose `collectForAccount`.
-
-## Spotify recently played collector
-
-- Requires the `user-read-recently-played` scope in `SPOTIFY_SCOPES` (already present in `.env.example`).
-- Stores `TrackPlayed` events with track/artist/album/context details and uses a per-account cursor based on the latest `played_at` timestamp.
-- Refreshes access tokens automatically when a refresh token is available. Connect Spotify via the OAuth UI to provision tokens.
-
-## OAuth and tokens
-
-- OAuth flows create `ConnectedAccount` and `OAuthToken` rows. Collectors look up the latest `OAuthToken` for a `ConnectedAccount` and use it when available.
 
 ## Troubleshooting
 
-- If collectors return zero new items, confirm per-account cursor values in the `cursor` table and that ConnectedAccounts have valid tokens/settings.
-- For IMAP problems, inspect collector logs — the IMAP client retries transient connection errors but will log socket timeouts and connection faults.
-
-## Next steps
-
-- Expand the React UI to show connected accounts, per-account settings, and digests.
-- Add more per-account collectors (Drive, Photos, other IMAP accounts) and enrichers.
-
-```
-- Email bookmark IMAP settings are moved out of global env vars and into per-account `EmailBookmarkSettings` stored in the DB; these are managed in the Settings UI (per ConnectedAccount).
+- **Collectors return zero items**: Confirm cursor values in the `Cursor` table and that connected accounts have valid tokens/settings.
+- **IMAP connection issues**: Check collector logs for socket timeouts or auth failures. Verify IMAP credentials and mailbox name.
+- **OAuth token errors**: Re-connect the account via Settings UI to refresh tokens.
+- **Database connection issues**: Verify `DATABASE_URL` is correct and PostgreSQL is running. Test with `psql "$DATABASE_URL" -c '\l'`
+- **Missing Trello events**: Ensure boards are selected in Settings and list names match exactly (case-insensitive).
