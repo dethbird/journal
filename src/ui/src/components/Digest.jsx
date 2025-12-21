@@ -139,12 +139,12 @@ const BookmarkSection = ({ section }) => {
   );
 };
 
-const MusicSection = ({ section }) => {
+const MusicSection = ({ section, inCard = false }) => {
   if (!section) return null;
   const summary = section.summary ?? {};
-  return (
-    <div className="box">
-      <p className="title is-5">Spotify</p>
+
+  const content = (
+    <>
       <p className="is-size-6">
         {summary.playCount ?? 0} plays · {summary.uniqueTracks ?? 0} tracks
         {summary.durationLabel ? ` · ${summary.durationLabel}` : ''}
@@ -196,17 +196,25 @@ const MusicSection = ({ section }) => {
           <p className="has-text-grey">No recent plays</p>
         )}
       </div>
+    </>
+  );
+
+  if (inCard) return <div>{content}</div>;
+
+  return (
+    <div className="box">
+      <p className="title is-5">Spotify</p>
+      {content}
     </div>
   );
 };
 
-const TimelineSection = ({ section }) => {
+const TimelineSection = ({ section, inCard = false }) => {
   if (!section) return null;
   const summary = section.summary ?? {};
 
-  return (
-    <div className="box">
-      <p className="title is-5">Timeline</p>
+  const content = (
+    <>
       <p className="is-size-6">
         {summary.totalVisits ?? 0} visits · {summary.totalActivities ?? 0} activities
         {summary.totalDistance ? ` · ${summary.totalDistance}` : ''}
@@ -249,6 +257,15 @@ const TimelineSection = ({ section }) => {
           <p className="is-size-7 has-text-grey">...and {section.items.length - 20} more</p>
         ) : null}
       </div>
+    </>
+  );
+
+  if (inCard) return <div>{content}</div>;
+
+  return (
+    <div className="box">
+      <p className="title is-5">Timeline</p>
+      {content}
     </div>
   );
 };
@@ -349,6 +366,28 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
       <div className="column is-12-mobile is-6-desktop">
         <div className="card">
           <header className="card-header">
+            <p className="card-header-title">Journal</p>
+          </header>
+          <div className="card-content">
+            {logs && logs.length > 0 ? (
+              <div className="journal-logs">
+                {logs.map((log) => (
+                  <div key={log.id} className="mb-3">
+                    <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
+                    <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(log.content || '') }} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="has-text-grey">No journal content</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="column is-12-mobile is-6-desktop">
+        <div className="card">
+          <header className="card-header">
             <p className="card-header-title">Goals</p>
           </header>
           <div className="card-content">
@@ -372,28 +411,6 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
               </div>
             ) : (
               <p className="has-text-grey">No goals</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="column is-12-mobile is-6-desktop">
-        <div className="card">
-          <header className="card-header">
-            <p className="card-header-title">Journal</p>
-          </header>
-          <div className="card-content">
-            {logs && logs.length > 0 ? (
-              <div className="journal-logs">
-                {logs.map((log) => (
-                  <div key={log.id} className="mb-3">
-                    <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
-                    <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(log.content || '') }} />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="has-text-grey">No journal content</p>
             )}
           </div>
         </div>
@@ -530,7 +547,9 @@ export default function Digest({ offsetDays = 0, onWeather }) {
         (() => {
           const github = vm.sections?.find((s) => s.kind === 'github') ?? null;
           const trello = vm.sections?.find((s) => s.kind === 'trello') ?? null;
-          const other = (vm.sections || []).filter((s) => s.kind !== 'github' && s.kind !== 'trello');
+          const music = vm.sections?.find((s) => s.kind === 'music') ?? null;
+          const timeline = vm.sections?.find((s) => s.kind === 'timeline') ?? null;
+          const other = (vm.sections || []).filter((s) => !['github', 'trello', 'music', 'timeline'].includes(s.kind));
 
           return (
             <>
@@ -563,10 +582,37 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                 </div>
               ) : null}
 
+              {(music || timeline) ? (
+                <div className="columns is-multiline">
+                  {music ? (
+                    <div className="column is-12-mobile is-6-desktop">
+                      <div className="card">
+                        <header className="card-header">
+                          <p className="card-header-title">Spotify</p>
+                        </header>
+                        <div className="card-content">
+                          <MusicSection section={music} inCard={true} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {timeline ? (
+                    <div className="column is-12-mobile is-6-desktop">
+                      <div className="card">
+                        <header className="card-header">
+                          <p className="card-header-title">Timeline</p>
+                        </header>
+                        <div className="card-content">
+                          <TimelineSection section={timeline} inCard={true} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               {other.map((section, idx) => {
                 if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} />;
-                if (section.kind === 'music') return <MusicSection key={`s-${idx}`} section={section} />;
-                if (section.kind === 'timeline') return <TimelineSection key={`s-${idx}`} section={section} />;
                 return null;
               })}
             </>
