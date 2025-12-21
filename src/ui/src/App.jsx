@@ -197,18 +197,6 @@ function App() {
 
   return (
     <>
-      <div className="top-timestamp">
-        {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
-          <div className="timestamp">
-            Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
-            {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
-          </div>
-        ) : collectorStatus?.currentRunning ? (
-          <div className="timestamp running">
-            Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
-          </div>
-        ) : null}
-      </div>
       <section className="hero is-fullheight has-background-light">
       <div className="hero-body">
         <div className="container">
@@ -217,38 +205,26 @@ function App() {
           {!state.loading && !state.error && !state.user && <LoginView />}
           {!state.loading && !state.error && state.user && (
             <div>
-              <div className="level mb-4">
-                <div className="level-left">
-                  <div>
-                    <p className="subtitle is-6 has-text-grey">Evidence Journal</p>
-                    <h1 className="title is-2">Hello, {state.user.displayName || 'friend'}</h1>
-                    {sendState.message ? <p className="help is-success">{sendState.message}</p> : null}
-                    {sendState.error ? <p className="help is-danger">{sendState.error}</p> : null}
+              <div className="mb-4">
+                {/* Navigation menu at top */}
+                <div className="level mb-3">
+                  <div className="level-left">
+                    <div>
+                      <p className="subtitle is-6 has-text-grey mb-0">Evidence Journal ({state.user.displayName || 'friend'})</p>
+                      {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
+                        <p className="is-size-7 has-text-grey">
+                          Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
+                          {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
+                        </p>
+                      ) : collectorStatus?.currentRunning ? (
+                        <p className="is-size-7 has-text-grey">
+                          Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-                <div className="level-right">
-                  <div className="buttons">
-                    <button
-                      className="button is-small"
-                      onClick={() => setOffsetDays((d) => d - 1)}
-                      title="Previous day"
-                    >
-                      <span className="icon">
-                        <i className="fa-solid fa-chevron-left" />
-                      </span>
-                    </button>
-                    <span className="button is-static is-small">{selectedDateLabel}</span>
-                    <button
-                      className="button is-small"
-                      onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
-                      disabled={offsetDays >= 0}
-                      title="Next day"
-                    >
-                      <span className="icon">
-                        <i className="fa-solid fa-chevron-right" />
-                      </span>
-                    </button>
-                    <span className="mx-2" />
+                  <div className="level-right">
+                    <div className="buttons">
                     <button
                       className={`button ${path === '/' ? 'is-primary' : 'is-light'}`}
                       title="Digest"
@@ -348,13 +324,44 @@ function App() {
                         <i className="fa-solid fa-right-from-bracket" />
                       </span>
                     </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Centered date selector with weather underneath */}
+                <div className="has-text-centered mb-3">
+                  <div className="buttons is-centered">
+                    <button
+                      className="button is-small"
+                      onClick={() => setOffsetDays((d) => d - 1)}
+                      title="Previous day"
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-chevron-left" />
+                      </span>
+                    </button>
+                    <span className="button is-static is-small">{selectedDateLabel}</span>
+                    <button
+                      className="button is-small"
+                      onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
+                      disabled={offsetDays >= 0}
+                      title="Next day"
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-chevron-right" />
+                      </span>
+                    </button>
                   </div>
                   {weather ? (
-                    <div className="has-text-right mt-2">
+                    <div className="mt-2">
                       <p className="is-size-7 has-text-grey">{weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)</p>
                     </div>
                   ) : null}
                 </div>
+
+                {/* Status messages */}
+                {sendState.message ? <p className="help is-success has-text-centered">{sendState.message}</p> : null}
+                {sendState.error ? <p className="help is-danger has-text-centered">{sendState.error}</p> : null}
               </div>
 
               <div>
