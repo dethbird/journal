@@ -388,7 +388,7 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
   );
 };
 
-export default function Digest({ offsetDays = 0 }) {
+export default function Digest({ offsetDays = 0, onWeather }) {
   const [state, setState] = useState({ loading: true, error: null, vm: null });
   const [logs, setLogs] = useState([]);
   const [goals, setGoals] = useState([]);
@@ -434,6 +434,11 @@ export default function Digest({ offsetDays = 0 }) {
           setState({ loading: false, error: null, vm: digestData });
           setLogs(logsData);
           setGoals(goalsData);
+          try {
+            if (onWeather) onWeather(digestData?.weather ?? null);
+          } catch (e) {
+            /* ignore */
+          }
         }
       } catch (err) {
         if (!cancelled) setState({ loading: false, error: err.message, vm: null });
@@ -500,40 +505,12 @@ export default function Digest({ offsetDays = 0 }) {
   }
 
   const { vm } = state;
-  const weather = vm?.weather;
   return (
     <div>
       {/* Journal entry at the top if present */}
       <JournalSection logs={logs} goals={goals} onToggleGoal={handleToggleGoal} />
-
-      <div className="box">
-        <div className="is-flex is-align-items-center is-justify-content-space-between">
-          <h2 className="title is-4 mb-0">Digest</h2>
-          <div className="is-flex is-align-items-center">
-            <button
-              className={`button is-small is-info mr-2${sendState.sending ? ' is-loading' : ''}`}
-              onClick={handleSend}
-              disabled={sendState.sending}
-              title="Send digest for this window"
-            >
-              <span className="icon">
-                <i className="fa-solid fa-envelope" />
-              </span>
-              <span className="is-hidden-mobile">Send</span>
-            </button>
-            {sendState.message ? <span className="has-text-success mr-2">{sendState.message}</span> : null}
-            {sendState.error ? <span className="has-text-danger mr-2">{sendState.error}</span> : null}
-            {weather ? (
-              <div className="has-text-right">
-                <p className="is-size-7 has-text-grey">
-                  {weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </div>
-        {!vm.sections?.length && logs.length === 0 && goals.length === 0 && <p className="has-text-grey mt-3">No events in this window.</p>}
-      </div>
+      {/* removed Digest header box; weather is lifted to App */}
+      {!vm.sections?.length && logs.length === 0 && goals.length === 0 && <div className="box"><p className="has-text-grey mt-3">No events in this window.</p></div>}
 
       {vm.sections?.map((section, idx) => {
         if (section.kind === 'github') return <GithubSection key={`s-${idx}`} section={section} />;

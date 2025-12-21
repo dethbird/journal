@@ -152,6 +152,13 @@ function App() {
   const [offsetDays, setOffsetDays] = useState(0);
   const [collectorStatus, setCollectorStatus] = useState(null);
 
+  const [weather, setWeather] = useState(null);
+  const cToF = (c) => {
+    const n = Number(c);
+    if (!Number.isFinite(n)) return '';
+    return Math.round(((n * 9) / 5 + 32) * 10) / 10;
+  };
+
   // Compute current selected date from offset
   const todayStart = startOfDay(new Date());
   const selectedDate = new Date(todayStart.getTime() + offsetDays * DAY_MS);
@@ -280,7 +287,17 @@ function App() {
                       onClick={async () => {
                         setSendState({ sending: true, message: null, error: null });
                         try {
-                          const res = await fetch('/api/digest/send', { method: 'POST', credentials: 'include' });
+                          // compute window for currently selected date
+                          const todayStart = startOfDay(new Date());
+                          const start = new Date(todayStart.getTime() + offsetDays * DAY_MS);
+                          const end = offsetDays === 0 ? new Date() : new Date(start.getTime() + DAY_MS);
+
+                          const res = await fetch('/api/digest/send', {
+                            method: 'POST',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ since: start.toISOString(), until: end.toISOString() }),
+                          });
                           if (!res.ok) {
                             const body = await res.json().catch(() => ({}));
                             throw new Error(body.error || `Send failed (${res.status})`);
@@ -332,6 +349,11 @@ function App() {
                       </span>
                     </button>
                   </div>
+                  {weather ? (
+                    <div className="has-text-right mt-2">
+                      <p className="is-size-7 has-text-grey">{weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)</p>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
@@ -370,7 +392,7 @@ function App() {
                   <Journal date={selectedDateISO} dateLabel={selectedDateLabel} />
                 ) : (
                   <div>
-                    <Digest offsetDays={offsetDays} />
+                    <Digest offsetDays={offsetDays} onWeather={setWeather} />
                   </div>
                 )}
               </div>
