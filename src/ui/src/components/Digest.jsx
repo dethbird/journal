@@ -39,11 +39,11 @@ const cToF = (c) => {
   return Math.round(((n * 9) / 5 + 32) * 10) / 10;
 };
 
-const GithubSection = ({ section }) => {
+const GithubSection = ({ section, inCard = false }) => {
   if (!section) return null;
-  return (
-    <div className="box">
-      <p className="title is-5">GitHub</p>
+
+  const content = (
+    <>
       {section.pushes?.length ? (
         section.pushes.map((push) => (
           <div key={`${push.repo}-${push.branch || 'main'}`} className="mb-3">
@@ -93,6 +93,15 @@ const GithubSection = ({ section }) => {
         Summary: {section.summary?.commits ?? 0} commits · {section.summary?.repoCount ?? 0} repos ·{' '}
         {section.summary?.prCount ?? 0} PRs
       </p>
+    </>
+  );
+
+  if (inCard) return <div>{content}</div>;
+
+  return (
+    <div className="box">
+      <p className="title is-5">GitHub</p>
+      {content}
     </div>
   );
 };
@@ -244,7 +253,7 @@ const TimelineSection = ({ section }) => {
   );
 };
 
-const TrelloSection = ({ section }) => {
+const TrelloSection = ({ section, inCard = false }) => {
   if (!section) return null;
   const summary = section.summary ?? {};
 
@@ -257,9 +266,8 @@ const TrelloSection = ({ section }) => {
     }
   };
 
-  return (
-    <div className="box">
-      <p className="title is-5">Trello</p>
+  const content = (
+    <>
       <p className="is-size-6">
         {summary.totalCardsMoved ?? 0} cards moved · {summary.totalCardsCreated ?? 0} created
         {summary.boardCount ? ` · ${summary.boardCount} boards` : ''}
@@ -311,6 +319,15 @@ const TrelloSection = ({ section }) => {
           <p className="has-text-grey">No Trello activity</p>
         )}
       </div>
+    </>
+  );
+
+  if (inCard) return <div>{content}</div>;
+
+  return (
+    <div className="box">
+      <p className="title is-5">Trello</p>
+      {content}
     </div>
   );
 };
@@ -509,14 +526,53 @@ export default function Digest({ offsetDays = 0, onWeather }) {
       {/* removed Digest header box; weather is lifted to App */}
       {!vm.sections?.length && logs.length === 0 && goals.length === 0 && <div className="box"><p className="has-text-grey mt-3">No events in this window.</p></div>}
 
-      {vm.sections?.map((section, idx) => {
-        if (section.kind === 'github') return <GithubSection key={`s-${idx}`} section={section} />;
-        if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} />;
-        if (section.kind === 'music') return <MusicSection key={`s-${idx}`} section={section} />;
-        if (section.kind === 'timeline') return <TimelineSection key={`s-${idx}`} section={section} />;
-        if (section.kind === 'trello') return <TrelloSection key={`s-${idx}`} section={section} />;
-        return null;
-      })}
+      {
+        (() => {
+          const github = vm.sections?.find((s) => s.kind === 'github') ?? null;
+          const trello = vm.sections?.find((s) => s.kind === 'trello') ?? null;
+          const other = (vm.sections || []).filter((s) => s.kind !== 'github' && s.kind !== 'trello');
+
+          return (
+            <>
+              {(github || trello) ? (
+                <div className="columns is-multiline">
+                  {github ? (
+                    <div className="column is-12-mobile is-6-desktop">
+                      <div className="card">
+                        <header className="card-header">
+                          <p className="card-header-title">GitHub</p>
+                        </header>
+                        <div className="card-content">
+                          <GithubSection section={github} inCard={true} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                  {trello ? (
+                    <div className="column is-12-mobile is-6-desktop">
+                      <div className="card">
+                        <header className="card-header">
+                          <p className="card-header-title">Trello</p>
+                        </header>
+                        <div className="card-content">
+                          <TrelloSection section={trello} inCard={true} />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {other.map((section, idx) => {
+                if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} />;
+                if (section.kind === 'music') return <MusicSection key={`s-${idx}`} section={section} />;
+                if (section.kind === 'timeline') return <TimelineSection key={`s-${idx}`} section={section} />;
+                return null;
+              })}
+            </>
+          );
+        })()
+      }
     </div>
   );
 }
