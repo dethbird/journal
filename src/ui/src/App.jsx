@@ -318,6 +318,12 @@ function App() {
                             />
                           </div>
                         )}
+
+                        {weather ? (
+                          <div style={{ marginTop: '0.125rem', textAlign: 'center' }}>
+                            <p className="is-size-7 has-text-grey">{weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)</p>
+                          </div>
+                        ) : null}
                       </div>
                       <button
                         className="button is-small"
@@ -330,18 +336,14 @@ function App() {
                         </span>
                       </button>
                     </div>
-                    {weather ? (
-                      <div className="mt-2">
-                        <p className="is-size-7 has-text-grey">{weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)</p>
-                      </div>
-                    ) : null}
+                    {/* weather moved into the date button container for tighter spacing */}
                   </div>
 
                   {/* Column 3: Navigation menu */}
                   <div className="column is-12-mobile is-4-tablet has-text-centered">
                     <div className="buttons is-centered">
                     <button
-                      className={`button ${path === '/' ? 'is-primary' : 'is-light'}`}
+                      className={`button ${path === '/' ? 'is-dark' : 'is-light'}`}
                       title="Digest"
                       aria-label="Digest"
                       aria-pressed={path === '/'}
@@ -349,6 +351,8 @@ function App() {
                         e.preventDefault();
                         window.history.pushState({}, '', '/');
                         setPath('/');
+                        setOffsetDays(0);
+                        setShowCalendar(false);
                       }}
                     >
                       <span className="icon">
@@ -356,7 +360,7 @@ function App() {
                       </span>
                     </button>
                     <button
-                      className={`button ${path === '/journal' ? 'is-primary' : 'is-light'}`}
+                      className={`button ${path === '/journal' ? 'is-dark' : 'is-light'}`}
                       title="Journal"
                       aria-label="Journal"
                       aria-pressed={path === '/journal'}
@@ -406,7 +410,7 @@ function App() {
                     </button>
                     <a
                       href="/settings"
-                      className={`button ${path === '/settings' ? 'is-primary' : 'is-light'}`}
+                      className={`button ${path === '/settings' ? 'is-dark' : 'is-light'}`}
                       onClick={(e) => {
                         e.preventDefault();
                         window.history.pushState({}, '', '/settings');
