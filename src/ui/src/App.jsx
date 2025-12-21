@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import Digest from './components/Digest';
 import Journal from './components/Journal';
 import Settings from './components/Settings';
@@ -151,6 +153,9 @@ function App() {
   const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
   const [offsetDays, setOffsetDays] = useState(0);
   const [collectorStatus, setCollectorStatus] = useState(null);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [dateRange, setDateRange] = useState({ minDate: null, maxDate: null });
+  const calendarRef = useRef(null);
 
   const [weather, setWeather] = useState(null);
   const cToF = (c) => {
@@ -195,6 +200,44 @@ function App() {
     };
   }, []);
 
+  // Fetch date range for calendar
+  useEffect(() => {
+    if (!state.user) return;
+    let cancelled = false;
+    const loadDateRange = async () => {
+      try {
+        const res = await fetch('/api/events/date-range', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) {
+          setDateRange({
+            minDate: data.minDate ? new Date(data.minDate) : null,
+            maxDate: data.maxDate ? new Date(data.maxDate) : null,
+          });
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    loadDateRange();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.user]);
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target)) {
+        setShowCalendar(false);
+      }
+    };
+    if (showCalendar) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showCalendar]);
+
   return (
     <>
       <section className="hero is-fullheight has-background-light">
@@ -235,7 +278,47 @@ function App() {
                           <i className="fa-solid fa-chevron-left" />
                         </span>
                       </button>
-                      <span className="button is-static is-small">{selectedDateLabel}</span>
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          className="button is-light is-small"
+                          onClick={() => setShowCalendar(!showCalendar)}
+                          title="Click to open calendar"
+                        >
+                          {selectedDateLabel}
+                        </button>
+                        {showCalendar && (
+                          <div
+                            ref={calendarRef}
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: '50%',
+                              transform: 'translateX(-50%)',
+                              marginTop: '0.5rem',
+                              zIndex: 1000,
+                              backgroundColor: 'white',
+                              boxShadow: '0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1), 0 0px 0 1px rgba(10, 10, 10, 0.02)',
+                              borderRadius: '4px',
+                              padding: '0.5rem',
+                            }}
+                          >
+                            <Calendar
+                              value={selectedDate}
+                              onChange={(date) => {
+                                const daysDiff = Math.floor((date.getTime() - todayStart.getTime()) / DAY_MS);
+                                setOffsetDays(daysDiff);
+                                setShowCalendar(false);
+                              }}
+                              minDate={dateRange.minDate}
+                              maxDate={dateRange.maxDate || new Date()}
+                              tileDisabled={({ date }) => {
+                                if (!dateRange.minDate || !dateRange.maxDate) return true;
+                                return date < dateRange.minDate || date > (dateRange.maxDate > new Date() ? new Date() : dateRange.maxDate);
+                              }}
+                            />
+                          </div>
+                        )}
+                      </div>
                       <button
                         className="button is-small"
                         onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}

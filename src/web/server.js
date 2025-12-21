@@ -966,6 +966,36 @@ app.get('/api/events', async (request, reply) => {
   }));
 });
 
+app.get('/api/events/date-range', async (request, reply) => {
+  const userId = verifySession(request.cookies?.journal_auth);
+  if (!userId) {
+    return reply.status(401).send({ error: 'Unauthorized' });
+  }
+
+  try {
+    const result = await prisma.event.aggregate({
+      _min: {
+        occurredAt: true,
+      },
+      _max: {
+        occurredAt: true,
+      },
+    });
+
+    if (!result._min.occurredAt || !result._max.occurredAt) {
+      return { minDate: null, maxDate: null };
+    }
+
+    return {
+      minDate: result._min.occurredAt.toISOString(),
+      maxDate: result._max.occurredAt.toISOString(),
+    };
+  } catch (error) {
+    request.log.error(error, 'Failed to fetch date range');
+    return reply.status(500).send({ error: 'Failed to fetch date range' });
+  }
+});
+
 app.get('/api/me', async (request, reply) => {
   app.log.info({ cookies: request.headers.cookie, signed: request.cookies?.journal_auth }, '👀 /api/me cookies');
   const user = await getSessionUser(request);
