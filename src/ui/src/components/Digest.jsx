@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import gsap from 'gsap';
 import trelloIcon from '../assets/trello.ico';
 import githubIcon from '../assets/github.ico';
 import goalsIcon from '../assets/goals.ico';
@@ -44,6 +45,37 @@ const cToF = (c) => {
   const n = Number(c);
   if (!Number.isFinite(n)) return '';
   return Math.round(((n * 9) / 5 + 32) * 10) / 10;
+};
+
+// Animated wrapper for digest sections
+const AnimatedSection = ({ children, delay = 0 }) => {
+  const sectionRef = useRef(null);
+
+  useEffect(() => {
+    const element = sectionRef.current;
+    if (!element) return;
+
+    // Set initial state
+    gsap.set(element, {
+      opacity: 0,
+      y: 30,
+    });
+
+    // Animate in
+    const animation = gsap.to(element, {
+      opacity: 1,
+      y: 0,
+      duration: 0.6,
+      delay: delay,
+      ease: 'power3.out',
+    });
+
+    return () => {
+      animation.kill();
+    };
+  }, [delay]);
+
+  return <div ref={sectionRef}>{children}</div>;
 };
 
 const GithubSection = ({ section, inCard = false }) => {
@@ -491,6 +523,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
           setState({ loading: false, error: null, vm: digestData });
           setLogs(logsData);
           setGoals(goalsData);
+          
           try {
             if (onWeather) onWeather(digestData?.weather ?? null);
           } catch (e) {
@@ -602,11 +635,20 @@ export default function Digest({ offsetDays = 0, onWeather }) {
 
   const { vm } = state;
   return (
-    <div>
+    <div key={offsetDays}>
       {/* Journal entry at the top if present */}
-      <JournalSection logs={logs} goals={goals} onToggleGoal={handleToggleGoal} />
+      <AnimatedSection delay={0}>
+        <JournalSection logs={logs} goals={goals} onToggleGoal={handleToggleGoal} />
+      </AnimatedSection>
+      
       {/* removed Digest header box; weather is lifted to App */}
-      {!vm.sections?.length && logs.length === 0 && goals.length === 0 && <div className="box"><p className="has-text-grey mt-3">No events in this window.</p></div>}
+      {!vm.sections?.length && logs.length === 0 && goals.length === 0 && (
+        <AnimatedSection delay={0.1}>
+          <div className="box">
+            <p className="has-text-grey mt-3">No events in this window.</p>
+          </div>
+        </AnimatedSection>
+      )}
 
       {
         (() => {
@@ -616,40 +658,53 @@ export default function Digest({ offsetDays = 0, onWeather }) {
           const timeline = vm.sections?.find((s) => s.kind === 'timeline') ?? null;
           const other = (vm.sections || []).filter((s) => !['github', 'trello', 'music', 'timeline'].includes(s.kind));
 
+          let delayCounter = 0.1;
+
           return (
             <>
               {(github || trello) ? (
-                <div className="columns is-multiline">
-                  {github ? (
-                    <div className="column is-12-mobile is-6-desktop">
-                      <GithubSection section={github} />
-                    </div>
-                  ) : null}
-                  {trello ? (
-                    <div className="column is-12-mobile is-6-desktop">
-                      <TrelloSection section={trello} />
-                    </div>
-                  ) : null}
-                </div>
+                <AnimatedSection delay={delayCounter}>
+                  <div className="columns is-multiline">
+                    {github ? (
+                      <div className="column is-12-mobile is-6-desktop">
+                        <GithubSection section={github} />
+                      </div>
+                    ) : null}
+                    {trello ? (
+                      <div className="column is-12-mobile is-6-desktop">
+                        <TrelloSection section={trello} />
+                      </div>
+                    ) : null}
+                  </div>
+                </AnimatedSection>
               ) : null}
 
               {(music || timeline) ? (
-                <div className="columns is-multiline">
-                  {music ? (
-                    <div className="column is-12-mobile is-6-desktop">
-                      <MusicSection section={music} />
-                    </div>
-                  ) : null}
-                  {timeline ? (
-                    <div className="column is-12-mobile is-6-desktop">
-                      <TimelineSection section={timeline} />
-                    </div>
-                  ) : null}
-                </div>
+                <AnimatedSection delay={(github || trello) ? delayCounter + 0.1 : delayCounter}>
+                  <div className="columns is-multiline">
+                    {music ? (
+                      <div className="column is-12-mobile is-6-desktop">
+                        <MusicSection section={music} />
+                      </div>
+                    ) : null}
+                    {timeline ? (
+                      <div className="column is-12-mobile is-6-desktop">
+                        <TimelineSection section={timeline} />
+                      </div>
+                    ) : null}
+                  </div>
+                </AnimatedSection>
               ) : null}
 
               {other.map((section, idx) => {
-                if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} onDeleteBookmark={handleDeleteBookmark} />;
+                const delay = delayCounter + (github || trello ? 0.1 : 0) + (music || timeline ? 0.1 : 0) + (idx * 0.05);
+                if (section.kind === 'bookmarks') {
+                  return (
+                    <AnimatedSection key={`s-${idx}`} delay={delay}>
+                      <BookmarkSection section={section} onDeleteBookmark={handleDeleteBookmark} />
+                    </AnimatedSection>
+                  );
+                }
                 return null;
               })}
             </>

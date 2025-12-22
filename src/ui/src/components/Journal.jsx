@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import gsap from 'gsap';
 
 const formatTime = (iso) => {
   if (!iso) return '';
@@ -7,6 +8,36 @@ const formatTime = (iso) => {
   } catch (e) {
     return iso;
   }
+};
+
+// Animated wrapper for journal content
+const AnimatedBox = ({ children }) => {
+  const boxRef = useRef(null);
+
+  useEffect(() => {
+    const element = boxRef.current;
+    if (!element) return;
+
+    // Set initial state
+    gsap.set(element, {
+      opacity: 0,
+      y: 30,
+    });
+
+    // Animate in
+    const animation = gsap.to(element, {
+      opacity: 1,
+      y: 0,
+      duration: 0.6,
+      ease: 'power3.out',
+    });
+
+    return () => {
+      animation.kill();
+    };
+  }, []);
+
+  return <div ref={boxRef}>{children}</div>;
 };
 
 export default function Journal({ date, dateLabel }) {
@@ -207,7 +238,7 @@ export default function Journal({ date, dateLabel }) {
   }
 
   return (
-    <div>
+    <AnimatedBox key={date}>
       <div className="box">
         <h2 className="title is-4 mb-4">Journal — {dateLabel}</h2>
 
@@ -349,6 +380,6 @@ export default function Journal({ date, dateLabel }) {
           </div>
         </div>
       </div>
-    </div>
+    </AnimatedBox>
   );
 }
