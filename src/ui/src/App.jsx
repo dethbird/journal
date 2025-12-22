@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useSwipeable } from 'react-swipeable';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import Digest from './components/Digest';
@@ -237,6 +238,49 @@ function App() {
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
   }, [showCalendar]);
+
+  // Keyboard navigation: Arrow keys to change days
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      // Don't intercept if user is typing in an input/textarea
+      if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA' || event.target.isContentEditable) {
+        return;
+      }
+      
+      // Don't intercept if calendar is open
+      if (showCalendar) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        setOffsetDays((d) => d - 1);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        setOffsetDays((d) => Math.min(d + 1, 0));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showCalendar]);
+
+  // Swipe handlers for touch devices
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => {
+      // Swipe left = next day (increment offset, but not past today)
+      setOffsetDays((d) => Math.min(d + 1, 0));
+    },
+    onSwipedRight: () => {
+      // Swipe right = previous day (decrement offset)
+      setOffsetDays((d) => d - 1);
+    },
+    trackMouse: false, // Don't track mouse as swipe (keyboard arrow keys handle that)
+    trackTouch: true,
+    delta: 50, // Minimum swipe distance (px)
+    preventScrollOnSwipe: false, // Allow scrolling
+    swipeDuration: 500, // Maximum swipe duration (ms)
+  });
 
   return (
     <>
@@ -483,11 +527,13 @@ function App() {
                       setState({ loading: false, user: null, error: null });
                     }}
                   />
-                ) : path === '/journal' ? (
-                  <Journal date={selectedDateISO} dateLabel={selectedDateLabel} />
                 ) : (
-                  <div>
-                    <Digest offsetDays={offsetDays} onWeather={setWeather} />
+                  <div {...swipeHandlers} style={{ touchAction: 'pan-y' }}>
+                    {path === '/journal' ? (
+                      <Journal date={selectedDateISO} dateLabel={selectedDateLabel} />
+                    ) : (
+                      <Digest offsetDays={offsetDays} onWeather={setWeather} />
+                    )}
                   </div>
                 )}
               </div>
