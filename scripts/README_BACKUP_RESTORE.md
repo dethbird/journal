@@ -92,23 +92,31 @@ node scripts/db_restore.js dumps/db_dump_2025-12-21T12-34-56-789Z.sql --clean
 
 When using `--clean`:
 1. **3-second warning** - Gives you time to abort (Ctrl+C)
-2. **Drops the entire public schema** - All tables, indexes, data are destroyed
-3. **Recreates the public schema** - Fresh, empty schema
+2. **Attempts to drop schema** - Tries `DROP SCHEMA IF EXISTS public CASCADE` (requires schema ownership)
+3. **Fallback to table-by-table** - If schema drop fails due to permissions, drops each table individually
 4. **Restores from dump** - Recreates all objects and data
 
 **⚠️ WARNING**: The `--clean` flag is DESTRUCTIVE and will permanently delete all data in the target database. Use with caution!
 
+**Permission Requirements**:
+- Ideally: Schema ownership for `DROP SCHEMA` (fastest)
+- Minimum: `DROP TABLE` permission on individual tables (fallback method)
+
+If you get permission errors, see the Troubleshooting section below.
+
 ### Without Clean Flag
 
 If you restore without `--clean`:
-- The dump file contains DROP IF EXISTS statements, so it will attempt to drop existing objects
-- If objects exist with data dependencies, you may get errors
-- Best practice: use `--clean` for a guaranteed clean restore
+- The dump file already contains `DROP IF EXISTS` statements
+- Tables will be dropped and recreated automatically
+- **This is often sufficient** and avoids permission issues
+- Only use `--clean` if you have orphaned objects or need guaranteed cleanup
 
 ### Requirements
 - `psql` must be installed (PostgreSQL client tools)
 - `DATABASE_URL` environment variable must be set
-- Database user must have CREATE/DROP permissions for schema operations
+- For `--clean`: DROP TABLE permissions (or schema ownership for faster operation)
+- For regular restore: CREATE TABLE permissions
 
 ## Important Notes
 
@@ -189,6 +197,26 @@ brew install postgresql
 - Verify `DATABASE_URL` is set: `echo $DATABASE_URL`
 - Test connection: `psql $DATABASE_URL -c "SELECT 1"`
 - Check if database exists and you have permissions
+
+### Permission errors ("must be owner of schema public")
+**This is common on managed databases or when you don't own the schema.**
+
+The script will automatically fall back to dropping tables individually. If this also fails:
+
+```sql
+-- Option 1: Grant ownership (requires superuser)
+ALTER SCHEMA public OWNER TO your_db_user;
+
+-- Option 2: Grant table permissions
+GRANT ALL ON ALL TABLES IN SCHEMA public TO your_db_user;
+GRANT CREATE ON SCHEMA public TO your_db_user;
+```
+
+**Best Practice**: Try restoring WITHOUT `--clean` first - the dump file already has `DROP IF EXISTS` statements:
+```bash
+# Just restore, let dump handle cleanup
+node scripts/db_restore.js path/to/dump.sql
+```
 
 ### Restore conflicts
 If you get errors about existing objects:

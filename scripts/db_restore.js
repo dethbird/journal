@@ -38,6 +38,10 @@ if (requested) {
 }
 
 console.log('Restoring database from', fileToRestore);
+if (!clean) {
+  console.log('\nNote: Dump file includes DROP IF EXISTS statements.');
+  console.log('      If restore fails due to conflicts, try with --clean flag.\n');
+}
 
 const which = spawnSync('which', ['psql']);
 if (which.status !== 0) {
@@ -64,14 +68,46 @@ if (clean) {
   // Give user a chance to abort
   spawnSync('sleep', ['3']);
   
-  console.log('\nCleaning target database: dropping and recreating schema public (destructive)');
-  const dropCmd = `DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;`;
-  const dropRes = spawnSync('psql', [conn, '-c', dropCmd], { stdio: 'inherit' });
-  if (dropRes.status !== 0) {
-    console.error('Failed to drop/recreate schema. Aborting restore.');
-    process.exit(dropRes.status || 4);
+  console.log('\nCleaning target database...');
+  
+  // First try to drop the schema (requires schema ownership)
+  const dropSchemaCmd = `DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;`;
+  const dropSchemaRes = spawnSync('psql', [conn, '-c', dropSchemaCmd], { stdio: 'pipe' });
+  
+  if (dropSchemaRes.status !== 0) {
+    // If schema drop fails (permission issue), drop tables individually
+    console.log('⚠️  Schema drop failed (insufficient permissions), trying table-by-table cleanup...');
+    
+    const listTablesCmd = `
+      SELECT tablename FROM pg_tables 
+      WHERE schemaname = 'public' 
+      ORDER BY tablename;
+    `;
+    const listRes = spawnSync('psql', [conn, '-t', '-c', listTablesCmd], { encoding: 'utf8' });
+    
+    if (listRes.status === 0 && listRes.stdout) {
+      const tables = listRes.stdout.trim().split('\n').map(t => t.trim()).filter(t => t);
+      
+      if (tables.length > 0) {
+        console.log(`Found ${tables.length} tables to drop...`);
+        const dropTablesCmd = tables.map(t => `DROP TABLE IF EXISTS "${t}" CASCADE;`).join(' ');
+        const dropTablesRes = spawnSync('psql', [conn, '-c', dropTablesCmd], { stdio: 'inherit' });
+        
+        if (dropTablesRes.status !== 0) {
+          console.error('Failed to drop tables. Aborting restore.');
+          process.exit(dropTablesRes.status || 4);
+        }
+        console.log('✓ All tables dropped successfully\n');
+      } else {
+        console.log('No tables found to drop (database is already clean)\n');
+      }
+    } else {
+      console.error('Failed to list tables. Aborting restore.');
+      process.exit(5);
+    }
+  } else {
+    console.log('✓ Schema cleaned successfully\n');
   }
-  console.log('✓ Schema cleaned successfully\n');
 }
 
 console.log('Restoring from SQL dump file...');
