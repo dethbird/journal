@@ -116,7 +116,7 @@ const GithubSection = ({ section, inCard = false }) => {
   );
 };
 
-const BookmarkSection = ({ section }) => {
+const BookmarkSection = ({ section, onDeleteBookmark }) => {
   if (!section) return null;
   return (
     <div className="box">
@@ -134,7 +134,7 @@ const BookmarkSection = ({ section }) => {
                 </a>
               </div>
             ) : null}
-            <div>
+            <div className="is-flex-grow-1">
               <a href={item.url} target="_blank" rel="noreferrer" className="has-text-weight-semibold">
                 {item.title}
               </a>
@@ -143,6 +143,16 @@ const BookmarkSection = ({ section }) => {
                 <p className="is-size-7 has-text-grey mt-1">Saved {formatTime(item.occurredAt)}</p>
               ) : null}
             </div>
+            {item.id && onDeleteBookmark ? (
+              <div className="ml-2">
+                <button
+                  className="delete is-small"
+                  onClick={() => onDeleteBookmark(item.id)}
+                  title="Delete bookmark"
+                  aria-label="Delete bookmark"
+                />
+              </div>
+            ) : null}
           </div>
         ))
       ) : (
@@ -513,6 +523,45 @@ export default function Digest({ offsetDays = 0, onWeather }) {
     }
   };
 
+  const handleDeleteBookmark = async (eventId) => {
+    if (!window.confirm('Delete this bookmark?')) return;
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('Failed to delete bookmark');
+      
+      // Update the view model to remove the bookmark
+      setState((prev) => {
+        if (!prev.vm) return prev;
+        
+        const updatedSections = prev.vm.sections?.map((section) => {
+          if (section.kind === 'bookmarks') {
+            const updatedItems = section.items?.filter((item) => item.id !== eventId) ?? [];
+            return {
+              ...section,
+              items: updatedItems,
+              count: updatedItems.length,
+            };
+          }
+          return section;
+        });
+        
+        return {
+          ...prev,
+          vm: {
+            ...prev.vm,
+            sections: updatedSections,
+          },
+        };
+      });
+    } catch (err) {
+      console.error('Delete bookmark error:', err);
+      alert('Failed to delete bookmark');
+    }
+  };
+
   const handleSend = async () => {
     const { start, end } = buildWindow(offsetDays);
     setSendState({ sending: true, message: null, error: null });
@@ -600,7 +649,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
               ) : null}
 
               {other.map((section, idx) => {
-                if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} />;
+                if (section.kind === 'bookmarks') return <BookmarkSection key={`s-${idx}`} section={section} onDeleteBookmark={handleDeleteBookmark} />;
                 return null;
               })}
             </>

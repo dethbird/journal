@@ -93,11 +93,29 @@ const enrichPending = async (items, pendingEnrichments) => {
 
     try {
       const preview = await withTimeout(enrichLink(link), linkEnrichTimeout, 'enrichLink');
+      
+      // If enrichment failed or returned insufficient data (e.g., 403, Cloudflare challenge),
+      // enhance it with email subject as fallback title
+      if (preview.status === 'ok' && preview.httpStatus && preview.httpStatus >= 400) {
+        const emailSubject = items[index].payload?.subject;
+        if (emailSubject && (!preview.title || preview.title === 'Just a moment...' || preview.title.includes('Access denied'))) {
+          preview.title = emailSubject;
+          preview.titleSource = 'email_subject_fallback';
+        }
+      }
+      
       items[index].enrichment = { enrichmentType: 'readability_v1', data: preview };
     } catch (err) {
+      // Even on error, try to provide email subject as fallback
+      const emailSubject = items[index].payload?.subject;
       items[index].enrichment = {
         enrichmentType: 'readability_v1',
-        data: { status: 'error', error: err?.message ?? String(err) },
+        data: { 
+          status: 'error', 
+          error: err?.message ?? String(err),
+          title: emailSubject || null,
+          titleSource: emailSubject ? 'email_subject_fallback' : null,
+        },
       };
     }
   }

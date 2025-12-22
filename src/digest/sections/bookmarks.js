@@ -26,6 +26,7 @@ export const buildBookmarksSection = (events) => {
     const imageUrl = readability?.lead_image_url ?? readability?.image ?? null;
 
     items.push({
+      id: evt.id, // Include event ID for deletion
       title,
       url,
       excerpt,

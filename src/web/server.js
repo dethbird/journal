@@ -1611,6 +1611,30 @@ app.delete('/api/logs/:id', async (request, reply) => {
   return { ok: true };
 });
 
+/**
+ * DELETE /api/events/:id
+ * Delete an event (e.g., bookmark)
+ */
+app.delete('/api/events/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+
+  // Verify ownership
+  const existing = await prisma.event.findUnique({ where: { id } });
+  if (!existing || existing.userId !== user.id) {
+    return reply.status(404).send({ error: 'Event not found' });
+  }
+
+  // Delete related enrichments and day events first (cascade should handle this, but being explicit)
+  await prisma.eventEnrichment.deleteMany({ where: { eventId: id } });
+  await prisma.dayEvent.deleteMany({ where: { eventId: id } });
+  await prisma.event.delete({ where: { id } });
+  
+  return { ok: true };
+});
+
 // Collector API
 
 /**
