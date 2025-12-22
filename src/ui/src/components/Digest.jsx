@@ -617,14 +617,6 @@ export default function Digest({ offsetDays = 0, onWeather }) {
   };
 
 
-  if (state.loading) {
-    return (
-      <div className="box">
-        <p className="subtitle is-6">Loading digest…</p>
-      </div>
-    );
-  }
-
   if (state.error) {
     return (
       <div className="box">
@@ -633,7 +625,10 @@ export default function Digest({ offsetDays = 0, onWeather }) {
     );
   }
 
+  // Show content even while loading for smooth transitions
   const { vm } = state;
+  if (!vm) return null;
+
   return (
     <div key={offsetDays}>
       {/* Journal entry at the top if present */}

@@ -221,14 +221,6 @@ export default function Journal({ date, dateLabel }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="box">
-        <p className="subtitle is-6">Loading journal…</p>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="box">
@@ -236,6 +228,9 @@ export default function Journal({ date, dateLabel }) {
       </div>
     );
   }
+
+  // Don't show loading state, let animation handle it
+  if (loading) return null;
 
   return (
     <AnimatedBox key={date}>
