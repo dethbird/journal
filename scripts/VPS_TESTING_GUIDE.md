@@ -133,8 +133,20 @@ You'll know it worked when you see:
 
 ## Next Steps After Successful Restore
 
-1. Verify data integrity
-2. Check application can connect
-3. Run any pending migrations: `npx prisma migrate deploy`
-4. Regenerate Prisma client: `npx prisma generate`
-5. Restart your application services
+1. **CRITICAL: Grant permissions to your application user**
+   - See main README for full instructions
+   - Quick fix: Save this as `grant_permissions.sql` and upload in phpPgAdmin SQL tab:
+   ```sql
+   GRANT USAGE ON SCHEMA public TO dethbird_journal;
+   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dethbird_journal;
+   GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dethbird_journal;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO dethbird_journal;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO dethbird_journal;
+   ```
+   - Replace `dethbird_journal` with your app's database username
+   
+2. Verify data integrity
+3. Check application can connect
+4. Run any pending migrations: `npx prisma migrate deploy`
+5. Regenerate Prisma client: `npx prisma generate`
+6. Restart your application services

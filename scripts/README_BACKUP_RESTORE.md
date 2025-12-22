@@ -150,9 +150,75 @@ dumps/
 └── db_dump_2025-12-21T18-15-20-789Z.sql
 ```
 
+### Grant Permissions After Restore
+
+**IMPORTANT**: After restoring, you must grant permissions to your application database user. This is a common issue on shared hosting or managed databases where the restore user differs from the application user.
+
+#### Symptoms of Missing Permissions
+- Application errors: `permission denied for table User`
+- Prisma errors: `ConnectorError ... permission denied for table ...`
+
+#### Solution: Grant Permissions
+
+If you have command-line access:
+```bash
+psql $DATABASE_URL << 'EOF'
+-- Grant usage on the schema
+GRANT USAGE ON SCHEMA public TO your_app_user;
+
+-- Grant all privileges on all existing tables
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO your_app_user;
+
+-- Grant all privileges on all sequences
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO your_app_user;
+
+-- Set default privileges for future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+  GRANT ALL PRIVILEGES ON TABLES TO your_app_user;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+  GRANT ALL PRIVILEGES ON SEQUENCES TO your_app_user;
+EOF
+```
+
+Replace `your_app_user` with your actual application database username (e.g., `dethbird_journal`).
+
+#### Using phpPgAdmin (Web Interface)
+
+If you only have web-based database access like phpPgAdmin:
+
+1. **Save the SQL to a file** (e.g., `grant_permissions.sql`):
+   ```sql
+   GRANT USAGE ON SCHEMA public TO dethbird_journal;
+   GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO dethbird_journal;
+   GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO dethbird_journal;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO dethbird_journal;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO dethbird_journal;
+   ```
+
+2. **In phpPgAdmin**:
+   - Navigate to your database (e.g., `dethbird_journal`)
+   - Click the **SQL** tab
+   - Look for **"Choose File"** or **"Browse"** button
+   - Upload your `grant_permissions.sql` file
+   - Click **Execute** or **Submit**
+
+   **Note**: Pasting multi-line SQL directly into the phpPgAdmin text box often doesn't work - use the file upload method instead.
+
+3. **Verify permissions were granted**:
+   ```sql
+   SELECT grantee, privilege_type, table_name
+   FROM information_schema.table_privileges
+   WHERE grantee = 'dethbird_journal' 
+     AND table_schema = 'public'
+   ORDER BY table_name, privilege_type;
+   ```
+   
+   You should see multiple rows showing SELECT, INSERT, UPDATE, DELETE, etc. on all tables.
+
 ### Verification After Restore
 
-After restoring, verify your data:
+After restoring and granting permissions, verify your data:
 
 ```bash
 # Check table counts
