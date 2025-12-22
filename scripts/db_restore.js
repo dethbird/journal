@@ -54,19 +54,39 @@ try {
 } catch (e) {}
 
 if (clean) {
-  console.log('Cleaning target database: dropping and recreating schema public (destructive)');
-  const dropCmd = `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`;
+  console.log('\n⚠️  WARNING: --clean flag will DROP ALL DATA in the target database!');
+  console.log('   This will destroy:');
+  console.log('   - All tables and their data');
+  console.log('   - All indexes, constraints, and foreign keys');
+  console.log('   - All functions, views, and other database objects');
+  console.log('\n   Proceeding in 3 seconds... (Ctrl+C to abort)');
+  
+  // Give user a chance to abort
+  spawnSync('sleep', ['3']);
+  
+  console.log('\nCleaning target database: dropping and recreating schema public (destructive)');
+  const dropCmd = `DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;`;
   const dropRes = spawnSync('psql', [conn, '-c', dropCmd], { stdio: 'inherit' });
   if (dropRes.status !== 0) {
     console.error('Failed to drop/recreate schema. Aborting restore.');
     process.exit(dropRes.status || 4);
   }
+  console.log('✓ Schema cleaned successfully\n');
 }
 
+console.log('Restoring from SQL dump file...');
 const res = spawnSync('psql', [conn, '-f', fileToRestore], { stdio: 'inherit' });
 if (res.status !== 0) {
-  console.error('psql failed with exit code', res.status);
+  console.error('\n✗ psql failed with exit code', res.status);
+  console.error('  Common issues:');
+  console.error('  - Database already has conflicting objects (try with --clean flag)');
+  console.error('  - Incorrect DATABASE_URL');
+  console.error('  - Permission issues');
   process.exit(res.status || 1);
 }
 
-console.log('Restore complete');
+console.log('\n✓ Restore complete!');
+console.log('  Next steps:');
+console.log('  1. Verify data: psql $DATABASE_URL -c "SELECT COUNT(*) FROM \"Event\""');
+console.log('  2. Check migrations: psql $DATABASE_URL -c "SELECT * FROM _prisma_migrations ORDER BY finished_at DESC LIMIT 5"');
+console.log('  3. Run Prisma migration if needed: npx prisma migrate deploy');

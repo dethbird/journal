@@ -35,11 +35,26 @@ try {
   // leave conn as DATABASE_URL if parsing fails
 }
 
-const args = ['--no-owner', '--no-privileges', '-f', outFile, conn];
+// Include verbose output and ensure clean schema structure
+const args = [
+  '--no-owner',
+  '--no-privileges',
+  '--clean',           // Include DROP statements for clean restore
+  '--if-exists',       // Use IF EXISTS to avoid errors on restore
+  '--verbose',         // Show progress
+  '-f', outFile,
+  conn
+];
+
 const res = spawnSync('pg_dump', args, { stdio: 'inherit' });
 if (res.status !== 0) {
   console.error('pg_dump failed with exit code', res.status);
   process.exit(res.status || 1);
 }
 
-console.log('Dump complete:', outFile);
+console.log('\n✓ Dump complete:', outFile);
+console.log('  This dump includes:');
+console.log('  - All tables, indexes, constraints, and foreign keys');
+console.log('  - DROP statements for clean restoration');
+console.log('  - All data from all tables (including _prisma_migrations if it exists)');
+console.log('\n  To restore: node scripts/db_restore.js');
