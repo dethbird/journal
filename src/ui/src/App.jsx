@@ -270,7 +270,7 @@ function App() {
                   <div className="column is-12-mobile is-4-tablet has-text-centered">
                     <div className="buttons is-centered">
                       <button
-                        className="button is-small"
+                        className="button is-small is-dark"
                         onClick={() => setOffsetDays((d) => d - 1)}
                         title="Previous day"
                       >
@@ -326,7 +326,7 @@ function App() {
                         ) : null}
                       </div>
                       <button
-                        className="button is-small"
+                        className="button is-small is-dark"
                         onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
                         disabled={offsetDays >= 0}
                         title="Next day"
