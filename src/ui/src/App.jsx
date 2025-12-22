@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useSwipeable } from 'react-swipeable';
+import gsap from 'gsap';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import Digest from './components/Digest';
@@ -157,6 +158,9 @@ function App() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [dateRange, setDateRange] = useState({ minDate: null, maxDate: null });
   const calendarRef = useRef(null);
+  const leftButtonRef = useRef(null);
+  const rightButtonRef = useRef(null);
+  const previousOffsetRef = useRef(0);
 
   const [weather, setWeather] = useState(null);
   const cToF = (c) => {
@@ -265,6 +269,30 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showCalendar]);
 
+  // Jiggle animation for navigation buttons
+  useEffect(() => {
+    if (previousOffsetRef.current !== offsetDays) {
+      const direction = offsetDays < previousOffsetRef.current ? 'left' : 'right';
+      const buttonRef = direction === 'left' ? leftButtonRef : rightButtonRef;
+      
+      if (buttonRef.current) {
+        gsap.fromTo(
+          buttonRef.current,
+          { rotation: 0 },
+          {
+            rotation: direction === 'left' ? -15 : 15,
+            duration: 0.1,
+            yoyo: true,
+            repeat: 3,
+            ease: 'power2.inOut',
+          }
+        );
+      }
+      
+      previousOffsetRef.current = offsetDays;
+    }
+  }, [offsetDays]);
+
   // Swipe handlers for touch devices
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
@@ -314,6 +342,7 @@ function App() {
                   <div className="column is-12-mobile is-4-tablet has-text-centered">
                     <div className="buttons is-centered">
                       <button
+                        ref={leftButtonRef}
                         className="button is-small is-dark"
                         onClick={() => setOffsetDays((d) => d - 1)}
                         title="Previous day"
@@ -370,6 +399,7 @@ function App() {
                         ) : null}
                       </div>
                       <button
+                        ref={rightButtonRef}
                         className="button is-small is-dark"
                         onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
                         disabled={offsetDays >= 0}
