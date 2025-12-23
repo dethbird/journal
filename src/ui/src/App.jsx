@@ -93,7 +93,7 @@ const CollectorControls = ({ onStatusChange }) => {
 
   return (
     <button
-      className={`button is-light${operation.running ? ' is-loading' : ''}${isRunning ? ' is-warning' : ''}`}
+      className={`button is-small is-light${operation.running ? ' is-loading' : ''}${isRunning ? ' is-warning' : ''}`}
       onClick={isRunning ? cancelCollector : startCollector}
       disabled={(!status.canStart && !isRunning) || operation.running || status.loading}
       title={isRunning ? 'Stop collection' : 'Start data collection'}
@@ -417,7 +417,7 @@ function App() {
                   <div className="column is-12-mobile is-4-tablet has-text-centered">
                     <div className="buttons is-centered">
                     <button
-                      className={`button ${path === '/' ? 'is-dark' : 'is-light'}`}
+                      className={`button is-small ${path === '/' ? 'is-dark' : 'is-light'}`}
                       title="Digest"
                       aria-label="Digest"
                       aria-pressed={path === '/'}
@@ -434,7 +434,7 @@ function App() {
                       </span>
                     </button>
                     <button
-                      className={`button ${path === '/journal' ? 'is-dark' : 'is-light'}`}
+                      className={`button is-small ${path === '/journal' ? 'is-dark' : 'is-light'}`}
                       title="Journal"
                       aria-label="Journal"
                       aria-pressed={path === '/journal'}
@@ -450,7 +450,7 @@ function App() {
                     </button>
                     <CollectorControls onStatusChange={setCollectorStatus} />
                     <button
-                      className={`button is-light${sendState.sending ? ' is-loading' : ''}`}
+                      className={`button is-small is-light${sendState.sending ? ' is-loading' : ''}`}
                       title="Send digest"
                       aria-label="Send digest"
                       onClick={async () => {
@@ -484,7 +484,7 @@ function App() {
                     </button>
                     <a
                       href="/settings"
-                      className={`button ${path === '/settings' ? 'is-dark' : 'is-light'}`}
+                      className={`button is-small ${path === '/settings' ? 'is-dark' : 'is-light'}`}
                       onClick={(e) => {
                         e.preventDefault();
                         window.history.pushState({}, '', '/settings');
@@ -498,7 +498,7 @@ function App() {
                       </span>
                     </a>
                     <button
-                      className="button is-light"
+                      className="button is-small is-light"
                       title="Logout"
                       aria-label="Logout"
                       onClick={async () => {
