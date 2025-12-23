@@ -205,19 +205,52 @@ const MusicSection = ({ section, inCard = false }) => {
         {summary.durationLabel ? ` · ${summary.durationLabel}` : ''}
       </p>
       {summary.topGenres?.length ? (
-        <p className="is-size-7 has-text-grey">
-          Top genres: {summary.topGenres.map((g) => `${g.name} (${g.percent}%)`).join(', ')}
-        </p>
+        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+          <p className="is-size-7 has-text-weight-semibold" style={{ marginBottom: '4px' }}>Top genres:</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {summary.topGenres.map((g, idx) => {
+              const label = encodeURIComponent(g.name);
+              const value = encodeURIComponent(`${g.percent}%`);
+              const labelBg = 'F3F4F6';
+              const messageColor = '7F8790';
+              const color = messageColor;
+              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}`;
+              return <img key={g.name} src={src} alt={`${g.name}: ${g.percent}%`} />;
+            })}
+          </div>
+        </div>
       ) : null}
       {summary.topArtists?.length ? (
-        <p className="is-size-7 has-text-grey">
-          Top artists: {summary.topArtists.map((a) => `${a.name} (${a.count})`).join(', ')}
-        </p>
+        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+          <p className="is-size-7 has-text-weight-semibold" style={{ marginBottom: '4px' }}>Top artists:</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {summary.topArtists.map((a, idx) => {
+              const label = encodeURIComponent(a.name);
+              const value = encodeURIComponent(`${a.count}`);
+              const labelBg = 'F3F4F6';
+              const messageColor = '7F8790';
+              const color = messageColor;
+              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}`;
+              return <img key={a.name} src={src} alt={`${a.name}: ${a.count}`} />;
+            })}
+          </div>
+        </div>
       ) : null}
       {summary.topTracks?.length ? (
-        <p className="is-size-7 has-text-grey">
-          Most played: {summary.topTracks.map((t) => `${t.name} (${t.count})`).join(', ')}
-        </p>
+        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+          <p className="is-size-7 has-text-weight-semibold" style={{ marginBottom: '4px' }}>Most played:</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+            {summary.topTracks.map((t, idx) => {
+              const label = encodeURIComponent(t.name);
+              const value = encodeURIComponent(`${t.count}`);
+              const labelBg = 'F3F4F6';
+              const messageColor = '7F8790';
+              const color = messageColor;
+              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}`;
+              return <img key={t.name} src={src} alt={`${t.name}: ${t.count}`} />;
+            })}
+          </div>
+        </div>
       ) : null}
 
       <div className="mt-3">
@@ -248,6 +281,9 @@ const MusicSection = ({ section, inCard = false }) => {
                 </p>
                 {play.playedAt ? (
                   <p className="is-size-7 has-text-grey">Played {formatTime(play.playedAt)}</p>
+                ) : null}
+                {play.genres?.length ? (
+                  <p className="is-size-7 has-text-grey">Genres: {play.genres.join(', ')}</p>
                 ) : null}
               </div>
             </div>
