@@ -1,13 +1,15 @@
 import Redis from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD;
+const REDIS_USERNAME = process.env.REDIS_USERNAME;
 const CACHE_ENABLED = process.env.REDIS_CACHE_ENABLED !== 'false';
 
 let redis = null;
 
 if (CACHE_ENABLED) {
   try {
-    redis = new Redis(REDIS_URL, {
+    const redisOptions = {
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
         if (times > 3) {
@@ -17,7 +19,19 @@ if (CACHE_ENABLED) {
         return Math.min(times * 100, 2000);
       },
       lazyConnect: true,
-    });
+    };
+
+    // Add password authentication if provided
+    if (REDIS_PASSWORD) {
+      redisOptions.password = REDIS_PASSWORD;
+    }
+
+    // Add username for Redis 6+ ACL (optional)
+    if (REDIS_USERNAME) {
+      redisOptions.username = REDIS_USERNAME;
+    }
+
+    redis = new Redis(REDIS_URL, redisOptions);
 
     redis.on('error', (err) => {
       console.warn('Redis client error:', err.message);
