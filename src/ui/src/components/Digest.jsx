@@ -458,8 +458,6 @@ const TrelloSection = ({ section, inCard = false }) => {
 };
 
 const JournalSection = ({ logs, goals, onToggleGoal }) => {
-  if ((!logs || logs.length === 0) && (!goals || goals.length === 0)) return null;
-
   const formatLogTime = (iso) => {
     if (!iso) return '';
     try {
@@ -471,13 +469,13 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
 
   return (
     <div className="columns is-multiline">
-      {logs && logs.length > 0 ? (
-        <div className="column is-12-mobile is-6-desktop">
-          <div className="box">
-              <p className="title is-5">
-                <img src={journalIcon} alt="Journal" className="section-icon" />
-                Journal
-              </p>
+      <div className="column is-12-mobile is-6-desktop">
+        <div className="box">
+          <p className="title is-5">
+            <img src={journalIcon} alt="Journal" className="section-icon" />
+            Journal
+          </p>
+          {logs && logs.length > 0 ? (
             <div className="journal-logs">
               {logs.map((log) => (
                 <div key={log.id} className="mb-3">
@@ -486,17 +484,19 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
                 </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <p className="has-text-grey">No journal entries for today</p>
+          )}
         </div>
-      ) : null}
+      </div>
 
-      {goals && goals.length > 0 ? (
-        <div className="column is-12-mobile is-6-desktop">
-          <div className="box">
-            <p className="title is-5">
-              <img src={goalsIcon} alt="Goals" className="section-icon" />
-              Goals
-            </p>
+      <div className="column is-12-mobile is-6-desktop">
+        <div className="box">
+          <p className="title is-5">
+            <img src={goalsIcon} alt="Goals" className="section-icon" />
+            Goals
+          </p>
+          {goals && goals.length > 0 ? (
             <div className="goals-list">
               {goals.map((goal) => (
                 <div key={goal.id} className="is-flex is-align-items-center mb-2">
@@ -514,9 +514,11 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
                 </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <p className="has-text-grey">No goals added for today</p>
+          )}
         </div>
-      ) : null}
+      </div>
     </div>
   );
 };
@@ -701,51 +703,88 @@ export default function Digest({ offsetDays = 0, onWeather }) {
 
           return (
             <>
-              {(github || trello) ? (
-                <AnimatedSection delay={delayCounter}>
-                  <div className="columns is-multiline">
+              <AnimatedSection delay={delayCounter}>
+                <div className="columns is-multiline">
+                  <div className="column is-12-mobile is-6-desktop">
                     {github ? (
-                      <div className="column is-12-mobile is-6-desktop">
-                        <GithubSection section={github} />
+                      <GithubSection section={github} />
+                    ) : (
+                      <div className="box">
+                        <p className="title is-5">
+                          <img src={githubIcon} alt="GitHub" className="section-icon" />
+                          GitHub
+                        </p>
+                        <p className="has-text-grey">No GitHub activity</p>
                       </div>
-                    ) : null}
+                    )}
+                  </div>
+                  <div className="column is-12-mobile is-6-desktop">
                     {trello ? (
-                      <div className="column is-12-mobile is-6-desktop">
-                        <TrelloSection section={trello} />
+                      <TrelloSection section={trello} />
+                    ) : (
+                      <div className="box">
+                        <p className="title is-5">
+                          <img src={trelloIcon} alt="Trello" className="section-icon" />
+                          Trello
+                        </p>
+                        <p className="has-text-grey">No Trello activity</p>
                       </div>
-                    ) : null}
+                    )}
                   </div>
-                </AnimatedSection>
-              ) : null}
+                </div>
+              </AnimatedSection>
 
-              {(music || timeline) ? (
-                <AnimatedSection delay={(github || trello) ? delayCounter + 0.1 : delayCounter}>
-                  <div className="columns is-multiline">
+              <AnimatedSection delay={delayCounter + 0.1}>
+                <div className="columns is-multiline">
+                  <div className="column is-12-mobile is-6-desktop">
                     {music ? (
-                      <div className="column is-12-mobile is-6-desktop">
-                        <MusicSection section={music} />
+                      <MusicSection section={music} />
+                    ) : (
+                      <div className="box">
+                        <p className="title is-5">
+                          <img src={spotifyIcon} alt="Spotify" className="section-icon" />
+                          Spotify
+                        </p>
+                        <p className="has-text-grey">No play activity</p>
                       </div>
-                    ) : null}
-                    {timeline ? (
-                      <div className="column is-12-mobile is-6-desktop">
-                        <TimelineSection section={timeline} />
-                      </div>
-                    ) : null}
+                    )}
                   </div>
-                </AnimatedSection>
-              ) : null}
+                  <div className="column is-12-mobile is-6-desktop">
+                    {timeline ? (
+                      <TimelineSection section={timeline} />
+                    ) : (
+                      <div className="box">
+                        <p className="title is-5">
+                          <img src={timelineIcon} alt="Timeline" className="section-icon" />
+                          Timeline
+                        </p>
+                        <p className="has-text-grey">No timeline events</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </AnimatedSection>
 
-              {other.map((section, idx) => {
-                const delay = delayCounter + (github || trello ? 0.1 : 0) + (music || timeline ? 0.1 : 0) + (idx * 0.05);
-                if (section.kind === 'bookmarks') {
-                  return (
-                    <AnimatedSection key={`s-${idx}`} delay={delay}>
-                      <BookmarkSection section={section} onDeleteBookmark={handleDeleteBookmark} />
-                    </AnimatedSection>
-                  );
-                }
-                return null;
-              })}
+              <AnimatedSection delay={delayCounter + 0.2}>
+                <div className="columns is-multiline">
+                  <div className="column is-12">
+                    {(() => {
+                      const bookmarks = vm.sections?.find((s) => s.kind === 'bookmarks') ?? null;
+                      return bookmarks ? (
+                        <BookmarkSection section={bookmarks} onDeleteBookmark={handleDeleteBookmark} />
+                      ) : (
+                        <div className="box">
+                          <p className="title is-5">
+                            <img src={bookmarksIcon} alt="Bookmarks" className="section-icon" />
+                            Bookmarks
+                          </p>
+                          <p className="has-text-grey">No bookmarks saved</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </AnimatedSection>
             </>
           );
         })()
