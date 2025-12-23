@@ -83,44 +83,25 @@ const renderMusic = (section) => {
     )
     .join('');
 
-  // Render shields.io badges with light label background and medium-grey numeric/value badges (white text)
-  const labelBg = 'F3F4F6'; // light grey for label background
-  const messageColor = '7F8790'; // slightly lighter grey for numeric/message part (keep white text)
-
-  const topGenresBadges = (summary.topGenres ?? [])
-    .map((g, idx) => {
-      const label = encodeURIComponent(g.name);
-      const value = encodeURIComponent(`${g.percent}%`);
-      const color = messageColor;
-      // Use the /static/v1 endpoint with query params to avoid path parsing issues (hyphens, special chars)
-      return `<img src="https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}" alt="${escapeHtml(g.name)}: ${g.percent}%" style="margin: 2px;" />`;
-    })
+  // Render as plain text instead of badges
+  const topGenresText = (summary.topGenres ?? [])
+    .map((g) => `${escapeHtml(g.name)}: ${g.percent}%`)
     .join(' ');
 
-  const topArtistsBadges = (summary.topArtists ?? [])
-    .map((a, idx) => {
-      const label = encodeURIComponent(a.name);
-      const value = encodeURIComponent(`${a.count}`);
-      const color = messageColor;
-      return `<img src="https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}" alt="${escapeHtml(a.name)}: ${a.count}" style="margin: 2px;" />`;
-    })
+  const topArtistsText = (summary.topArtists ?? [])
+    .map((a) => `${escapeHtml(a.name)}: ${a.count}`)
     .join(' ');
 
-  const topTracksBadges = (summary.topTracks ?? [])
-    .map((t, idx) => {
-      const label = encodeURIComponent(t.name);
-      const value = encodeURIComponent(`${t.count}`);
-      const color = messageColor;
-      return `<img src="https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}" alt="${escapeHtml(t.name)}: ${t.count}" style="margin: 2px;" />`;
-    })
+  const topTracksText = (summary.topTracks ?? [])
+    .map((t) => `${escapeHtml(t.name)}: ${t.count}`)
     .join(' ');
 
   return `
     <h3>Spotify</h3>
     <div class="summary">${escapeHtml(summaryParts.join(' · '))}</div>
-    ${topGenresBadges ? `<div class="meta" style="margin-top: 8px;"><strong>Top genres:</strong><br/>${topGenresBadges}</div>` : ''}
-    ${topArtistsBadges ? `<div class="meta" style="margin-top: 8px;"><strong>Top artists:</strong><br/>${topArtistsBadges}</div>` : ''}
-    ${topTracksBadges ? `<div class="meta" style="margin-top: 8px;"><strong>Most played:</strong><br/>${topTracksBadges}</div>` : ''}
+    ${topGenresText ? `<div class="meta" style="margin-top: 8px;"><strong>Top genres:</strong><br/>${topGenresText}</div>` : ''}
+    ${topArtistsText ? `<div class="meta" style="margin-top: 8px;"><strong>Top artists:</strong><br/>${topArtistsText}</div>` : ''}
+    ${topTracksText ? `<div class="meta" style="margin-top: 8px;"><strong>Most played:</strong><br/>${topTracksText}</div>` : ''}
     <div class="cards">${plays || '<div class="muted">No recent plays</div>'}</div>
   `;
 };
