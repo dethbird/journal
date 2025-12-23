@@ -18,6 +18,7 @@ export const buildSpotifySection = (events) => {
 
   const artistCounts = new Map();
   const trackCounts = new Map();
+  const genreCounts = new Map();
   let durationMs = 0;
   let first = null;
   let last = null;
@@ -46,6 +47,14 @@ export const buildSpotifySection = (events) => {
       trackCounts.set(trackKey, existing);
     }
 
+    // Count genres
+    if (Array.isArray(payload.genres)) {
+      for (const genre of payload.genres) {
+        const current = genreCounts.get(genre) ?? 0;
+        genreCounts.set(genre, current + 1);
+      }
+    }
+
     const occurredAt = evt.occurredAt ? new Date(evt.occurredAt) : null;
     if (occurredAt && !Number.isNaN(occurredAt.getTime())) {
       if (!first || occurredAt < first) first = occurredAt;
@@ -60,6 +69,7 @@ export const buildSpotifySection = (events) => {
       playedAt: occurredAt ? occurredAt.toISOString() : null,
       url: track.externalUrl ?? track.external_urls?.spotify ?? null,
       uri: track.uri ?? (track.id ? `spotify:track:${track.id}` : null),
+      genres: payload.genres ?? [],
     });
   }
 
@@ -71,6 +81,17 @@ export const buildSpotifySection = (events) => {
   const topTracks = [...trackCounts.values()]
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .slice(0, MAX_TRACKS);
+
+  // Calculate genre metrics
+  const totalGenreOccurrences = [...genreCounts.values()].reduce((a, b) => a + b, 0);
+  const topGenres = [...genreCounts.entries()]
+    .map(([genre, count]) => ({
+      name: genre,
+      count,
+      percent: totalGenreOccurrences > 0 ? parseFloat(((count / totalGenreOccurrences) * 100).toFixed(1)) : 0,
+    }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10); // Top 10 genres
 
   const orderedPlays = plays
     .sort((a, b) => new Date(b.playedAt).getTime() - new Date(a.playedAt).getTime())
@@ -87,6 +108,7 @@ export const buildSpotifySection = (events) => {
       lastPlay: last ? last.toISOString() : null,
       topArtists,
       topTracks,
+      topGenres,
     },
     plays: orderedPlays,
   };

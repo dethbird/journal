@@ -77,10 +77,12 @@ const renderMusic = (section) => {
 
   const topArtists = (summary.topArtists ?? []).map((a) => `${escapeHtml(a.name)} (${a.count})`).join(', ');
   const topTracks = (summary.topTracks ?? []).map((t) => `${escapeHtml(t.name)} (${t.count})`).join(', ');
+  const topGenres = (summary.topGenres ?? []).map((g) => `${escapeHtml(g.name)} (${g.percent}%)`).join(', ');
 
   return `
     <h3>Spotify</h3>
     <div class="summary">${escapeHtml(summaryParts.join(' · '))}</div>
+    ${topGenres ? `<div class="meta">Top genres: ${topGenres}</div>` : ''}
     ${topArtists ? `<div class="meta">Top artists: ${topArtists}</div>` : ''}
     ${topTracks ? `<div class="meta">Most played: ${topTracks}</div>` : ''}
     <div class="cards">${plays || '<div class="muted">No recent plays</div>'}</div>

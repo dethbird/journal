@@ -1,5 +1,6 @@
 import { registerCollector } from '../registry.js';
 import prisma from '../../lib/prismaClient.js';
+import { getCached, setCached, getMultipleCached, CACHE_KEYS, CACHE_TTL } from '../../lib/redisClient.js';
 
 const source = 'spotify';
 const API_BASE = 'https://api.spotify.com/v1';
@@ -98,6 +99,220 @@ const resolveAccessToken = async (connectedAccount) => {
   return { accessToken: tokenRecord.accessToken, tokenRecord };
 };
 
+/**
+ * Fetch artist info with caching
+ * @param {string} artistId - Spotify artist ID
+ * @param {string} accessToken - Access token
+ * @returns {Promise<object|null>} - Artist info or null
+ */
+const getArtistWithCache = async (artistId, accessToken) => {
+  if (!artistId) return null;
+  
+  const cacheKey = CACHE_KEYS.ARTIST + artistId;
+  
+  // Try cache first
+  const cached = await getCached(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  // Fetch from Spotify API
+  try {
+    const res = await fetch(`${API_BASE}/artists/${artistId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    
+    if (!res.ok) {
+      console.warn(`Failed to fetch artist ${artistId}: ${res.status}`);
+      return null;
+    }
+    
+    const artist = await res.json();
+    
+    // Cache the result
+    await setCached(cacheKey, artist, CACHE_TTL.ARTIST);
+    
+    return artist;
+  } catch (err) {
+    console.error('Error fetching artist:', err.message);
+    return null;
+  }
+};
+
+/**
+ * Fetch multiple artists with caching (batch)
+ * @param {string[]} artistIds - Array of Spotify artist IDs
+ * @param {string} accessToken - Access token
+ * @returns {Promise<Map<string, object>>} - Map of artistId to artist info
+ */
+const getArtistsWithCache = async (artistIds, accessToken) => {
+  const result = new Map();
+  if (!artistIds?.length) return result;
+  
+  // Build cache keys
+  const cacheKeys = artistIds.map((id) => CACHE_KEYS.ARTIST + id);
+  const cached = await getMultipleCached(cacheKeys);
+  
+  // Populate results from cache
+  const uncachedIds = [];
+  for (const artistId of artistIds) {
+    const cacheKey = CACHE_KEYS.ARTIST + artistId;
+    if (cached.has(cacheKey)) {
+      result.set(artistId, cached.get(cacheKey));
+    } else {
+      uncachedIds.push(artistId);
+    }
+  }
+  
+  // Fetch uncached artists in batches
+  const batchSize = 50; // Spotify allows up to 50 artists per request
+  for (let i = 0; i < uncachedIds.length; i += batchSize) {
+    const batch = uncachedIds.slice(i, i + batchSize);
+    
+    try {
+      const res = await fetch(`${API_BASE}/artists?ids=${batch.join(',')}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      
+      if (!res.ok) {
+        console.warn(`Failed to fetch artists batch: ${res.status}`);
+        continue;
+      }
+      
+      const data = await res.json();
+      const artists = data.artists || [];
+      
+      for (const artist of artists) {
+        if (artist && artist.id) {
+          result.set(artist.id, artist);
+          // Cache each artist
+          await setCached(CACHE_KEYS.ARTIST + artist.id, artist, CACHE_TTL.ARTIST);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching artists batch:', err.message);
+    }
+    
+    // Small delay between batches to avoid rate limiting
+    if (i + batchSize < uncachedIds.length) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  
+  return result;
+};
+
+/**
+ * Fetch album info with caching
+ * @param {string} albumId - Spotify album ID
+ * @param {string} accessToken - Access token
+ * @returns {Promise<object|null>} - Album info or null
+ */
+const getAlbumWithCache = async (albumId, accessToken) => {
+  if (!albumId) return null;
+  
+  const cacheKey = CACHE_KEYS.ALBUM + albumId;
+  
+  // Try cache first
+  const cached = await getCached(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  // Fetch from Spotify API
+  try {
+    const res = await fetch(`${API_BASE}/albums/${albumId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    
+    if (!res.ok) {
+      console.warn(`Failed to fetch album ${albumId}: ${res.status}`);
+      return null;
+    }
+    
+    const album = await res.json();
+    
+    // Cache the result
+    await setCached(cacheKey, album, CACHE_TTL.ALBUM);
+    
+    return album;
+  } catch (err) {
+    console.error('Error fetching album:', err.message);
+    return null;
+  }
+};
+
+/**
+ * Fetch multiple albums with caching (batch)
+ * @param {string[]} albumIds - Array of Spotify album IDs
+ * @param {string} accessToken - Access token
+ * @returns {Promise<Map<string, object>>} - Map of albumId to album info
+ */
+const getAlbumsWithCache = async (albumIds, accessToken) => {
+  const result = new Map();
+  if (!albumIds?.length) return result;
+  
+  // Build cache keys
+  const cacheKeys = albumIds.map((id) => CACHE_KEYS.ALBUM + id);
+  const cached = await getMultipleCached(cacheKeys);
+  
+  // Populate results from cache
+  const uncachedIds = [];
+  for (const albumId of albumIds) {
+    const cacheKey = CACHE_KEYS.ALBUM + albumId;
+    if (cached.has(cacheKey)) {
+      result.set(albumId, cached.get(cacheKey));
+    } else {
+      uncachedIds.push(albumId);
+    }
+  }
+  
+  // Fetch uncached albums in batches
+  const batchSize = 20; // Spotify allows up to 20 albums per request
+  for (let i = 0; i < uncachedIds.length; i += batchSize) {
+    const batch = uncachedIds.slice(i, i + batchSize);
+    
+    try {
+      const res = await fetch(`${API_BASE}/albums?ids=${batch.join(',')}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      
+      if (!res.ok) {
+        console.warn(`Failed to fetch albums batch: ${res.status}`);
+        continue;
+      }
+      
+      const data = await res.json();
+      const albums = data.albums || [];
+      
+      for (const album of albums) {
+        if (album && album.id) {
+          result.set(album.id, album);
+          // Cache each album
+          await setCached(CACHE_KEYS.ALBUM + album.id, album, CACHE_TTL.ALBUM);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching albums batch:', err.message);
+    }
+    
+    // Small delay between batches to avoid rate limiting
+    if (i + batchSize < uncachedIds.length) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  
+  return result;
+};
+
 const mapPlayToEvent = (item, userId) => {
   const track = item.track;
   if (!track || !item.played_at) return null;
@@ -182,6 +397,79 @@ const fetchRecentPlays = async (accessToken, before) => {
   return res;
 };
 
+/**
+ * Enrich events with genre information
+ * @param {object[]} events - Array of events
+ * @param {string} accessToken - Access token
+ * @returns {Promise<object[]>} - Events with enriched genre data
+ */
+const enrichEventsWithGenres = async (events, accessToken) => {
+  if (!events?.length) return events;
+  
+  // Collect unique artist and album IDs
+  const artistIds = new Set();
+  const albumIds = new Set();
+  
+  for (const event of events) {
+    const payload = event.event?.payload || event.payload;
+    if (!payload) continue;
+    
+    // Collect artist IDs
+    if (Array.isArray(payload.artists)) {
+      for (const artist of payload.artists) {
+        if (artist?.id) artistIds.add(artist.id);
+      }
+    }
+    
+    // Collect album ID
+    if (payload.album?.id) {
+      albumIds.add(payload.album.id);
+    }
+  }
+  
+  // Fetch all artists and albums with caching
+  const artistsMap = await getArtistsWithCache([...artistIds], accessToken);
+  const albumsMap = await getAlbumsWithCache([...albumIds], accessToken);
+  
+  // Enrich each event with genres
+  for (const event of events) {
+    const eventObj = event.event || event;
+    const payload = eventObj.payload;
+    if (!payload) continue;
+    
+    const genres = new Set();
+    
+    // Collect genres from artists
+    if (Array.isArray(payload.artists)) {
+      for (const artist of payload.artists) {
+        if (artist?.id) {
+          const artistData = artistsMap.get(artist.id);
+          if (artistData?.genres) {
+            for (const genre of artistData.genres) {
+              genres.add(genre);
+            }
+          }
+        }
+      }
+    }
+    
+    // Collect genres from album (albums typically have fewer/no genres, but include them if present)
+    if (payload.album?.id) {
+      const albumData = albumsMap.get(payload.album.id);
+      if (albumData?.genres) {
+        for (const genre of albumData.genres) {
+          genres.add(genre);
+        }
+      }
+    }
+    
+    // Add genres to payload
+    payload.genres = [...genres];
+  }
+  
+  return events;
+};
+
 const collectForAccount = async (connectedAccount) => {
   const { accessToken, tokenRecord } = await resolveAccessToken(connectedAccount);
   if (!accessToken) {
@@ -261,6 +549,11 @@ const collectForAccount = async (connectedAccount) => {
       where: { id: cursorRecord.id },
       data: { cursor: String(maxPlayedAt) },
     });
+  }
+
+  // Enrich items with genre information
+  if (items.length > 0) {
+    await enrichEventsWithGenres(items, accessTokenInUse);
   }
 
   return { items, nextCursor: maxPlayedAt != null ? String(maxPlayedAt) : sinceMs };

@@ -44,6 +44,9 @@ const renderMusic = (section) => {
   if (summary.durationLabel) summaryParts.push(summary.durationLabel);
   lines.push(`• ${summaryParts.join(' · ')}`);
 
+  if ((summary.topGenres ?? []).length) {
+    lines.push(`• Top genres: ${summary.topGenres.map((g) => `${g.name} (${g.percent}%)`).join(', ')}`);
+  }
   if ((summary.topArtists ?? []).length) {
     lines.push(`• Top artists: ${summary.topArtists.map((a) => `${a.name} (${a.count})`).join(', ')}`);
   }

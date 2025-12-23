@@ -204,6 +204,11 @@ const MusicSection = ({ section, inCard = false }) => {
         {summary.playCount ?? 0} plays · {summary.uniqueTracks ?? 0} tracks
         {summary.durationLabel ? ` · ${summary.durationLabel}` : ''}
       </p>
+      {summary.topGenres?.length ? (
+        <p className="is-size-7 has-text-grey">
+          Top genres: {summary.topGenres.map((g) => `${g.name} (${g.percent}%)`).join(', ')}
+        </p>
+      ) : null}
       {summary.topArtists?.length ? (
         <p className="is-size-7 has-text-grey">
           Top artists: {summary.topArtists.map((a) => `${a.name} (${a.count})`).join(', ')}
