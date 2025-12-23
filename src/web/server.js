@@ -8,6 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import nodemailer from 'nodemailer';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 import prisma from '../lib/prismaClient.js';
@@ -256,6 +258,10 @@ const sendDigestEmail = async ({ user, vm, delivery }) => {
   const from = delivery.fromName ? `${delivery.fromName} <${delivery.fromEmail}>` : delivery.fromEmail;
   const to = delivery.replyTo || delivery.fromEmail;
 
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const logoPath = path.join(__dirname, '..', 'ui', 'public', 'logo-full.png');
+
   return transport.sendMail({
     from,
     to: vm.userEmail || to,
@@ -263,6 +269,13 @@ const sendDigestEmail = async ({ user, vm, delivery }) => {
     text,
     html,
     replyTo: delivery.replyTo || undefined,
+    attachments: [
+      {
+        filename: 'logo-full.png',
+        path: logoPath,
+        cid: 'logo-full', // Content ID for inline embedding
+      },
+    ],
   });
 };
 

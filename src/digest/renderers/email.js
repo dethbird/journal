@@ -214,6 +214,7 @@ const renderTrello = (section) => {
 const baseStyle = `
   body { font-family: Arial, sans-serif; background: #f7f7f9; color: #1f2933; margin: 0; padding: 24px; }
   .wrapper { max-width: 640px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; }
+  .logo { height: 32px; margin-bottom: 8px; }
   h1 { margin: 0 0 8px 0; font-size: 22px; }
   h2 { margin: 4px 0 4px 0; font-size: 16px; color: #6b7280; }
   .weather-summary { margin: 0 0 16px 0; font-size: 14px; color: #6b7280; }
@@ -273,7 +274,7 @@ export const renderEmailBaseHtml = (vm) => {
 </head>
 <body>
   <div class="wrapper">
-    <h1>Daily Digest</h1>
+    <img src="cid:logo-full" alt="Evidence Journal" class="logo" />
     <h2>${escapeHtml(formatDate(vm.window.start))}</h2>
     ${weatherHtml}
     ${sections || '<div class="muted">No events in this window.</div>'}
