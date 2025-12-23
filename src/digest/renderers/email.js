@@ -266,6 +266,8 @@ export const renderEmailBaseHtml = (vm) => {
     ? `<p class="weather-summary">${escapeHtml(vm.weather.weather_description)} · ${escapeHtml(String(vm.weather.temperature_c ?? ''))}°C (${escapeHtml(String(cToF(vm.weather.temperature_c)))}°F)</p>`
     : '';
 
+  const logoUrl = process.env.PUBLIC_URL || 'https://evidence.journal';
+  
   return `<!doctype html>
 <html>
 <head>
@@ -274,7 +276,7 @@ export const renderEmailBaseHtml = (vm) => {
 </head>
 <body>
   <div class="wrapper">
-    <img src="cid:logo-full" alt="Evidence Journal" class="logo" />
+    <img src="${logoUrl}/logo-full.png" alt="Evidence Journal" class="logo" />
     <h2>${escapeHtml(formatDate(vm.window.start))}</h2>
     ${weatherHtml}
     ${sections || '<div class="muted">No events in this window.</div>'}
