@@ -7,6 +7,7 @@ import Digest from './components/Digest';
 import Journal from './components/Journal';
 import Settings from './components/Settings';
 import { CONNECT_PROVIDERS } from './constants';
+import logoFull from './assets/logo/logo-full.png';
 
 const CollectorControls = ({ onStatusChange }) => {
   const [status, setStatus] = useState({ loading: true, canStart: false, currentRunning: null, recentRuns: [] });
@@ -325,7 +326,8 @@ function App() {
                 <div className="columns is-mobile is-multiline">
                   {/* Column 1: Header and collection status */}
                   <div className="column is-12-mobile is-4-tablet has-text-centered">
-                    <p className="subtitle is-6 has-text-grey mb-0">Evidence Journal ({state.user.displayName || 'friend'})</p>
+                    <img src={logoFull} alt="Evidence Journal" style={{ height: '24px', display: 'inline-block' }} />
+                    <p className="is-size-7 has-text-grey mb-1">{state.user.displayName || 'friend'}</p>
                     {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
                       <p className="is-size-7 has-text-grey">
                         Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}

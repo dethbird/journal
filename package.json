@@ -8,6 +8,7 @@
     "ui:dev": "vite --config src/ui/vite.config.js",
     "ui:build": "vite build --config src/ui/vite.config.js",
     "ui:preview": "vite preview --config src/ui/vite.config.js",
+    "ui:icons": "node src/ui/generate-icons.js",
     "collector:run": "node src/collector/run.js",
     "digest:run": "node src/digest/run.js",
     "db:dump": "node scripts/db_dump.js",
