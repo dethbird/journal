@@ -42,13 +42,20 @@ const renderGithub = (section) => {
 const renderBookmarks = (section) => {
   const items = (section.items ?? [])
     .map(
-      (item) => `
+      (item) => {
+        const timestamp = item.occurredAt ? new Date(item.occurredAt).toLocaleString(undefined, { month: 'numeric', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+        const sourceDomain = item.sourceDomain ? ` | via ${item.sourceDomain}` : '';
+        const savedLine = timestamp || sourceDomain ? `<div class="meta">Saved ${timestamp}${sourceDomain}</div>` : '';
+        
+        return `
         <div class="card bookmark">
           ${item.imageUrl ? `<div class="thumb"><img src="${escapeHtml(item.imageUrl)}" alt=""/></div>` : ''}
           <div class="title"><a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a></div>
           ${item.excerpt ? `<div class="excerpt">${escapeHtml(item.excerpt)}</div>` : ''}
+          ${savedLine}
         </div>
-      `
+      `;
+      }
     )
     .join('');
 

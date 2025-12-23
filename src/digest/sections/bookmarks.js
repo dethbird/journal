@@ -24,6 +24,16 @@ export const buildBookmarksSection = (events) => {
     const title = readability?.title ?? payload.subject ?? url;
     const excerpt = readability?.excerpt ?? payload.raw?.snippet ?? payload.snippet ?? null;
     const imageUrl = readability?.lead_image_url ?? readability?.image ?? null;
+    
+    // Extract domain from enrichment site or parse from URL
+    let sourceDomain = readability?.site ?? null;
+    if (!sourceDomain && url) {
+      try {
+        sourceDomain = new URL(url).hostname.replace(/^www\./, '');
+      } catch (err) {
+        // ignore
+      }
+    }
 
     items.push({
       id: evt.id, // Include event ID for deletion
@@ -32,6 +42,7 @@ export const buildBookmarksSection = (events) => {
       excerpt,
       imageUrl,
       from: payload.from ?? null,
+      sourceDomain,
       occurredAt: evt.occurredAt instanceof Date ? evt.occurredAt.toISOString() : evt.occurredAt,
     });
   }

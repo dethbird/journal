@@ -171,8 +171,11 @@ const BookmarkSection = ({ section, onDeleteBookmark }) => {
                 {item.title}
               </a>
               {item.excerpt ? <p className="is-size-7 mt-1">{item.excerpt}</p> : null}
-              {item.occurredAt ? (
-                <p className="is-size-7 has-text-grey mt-1">Saved {formatTime(item.occurredAt)}</p>
+              {item.occurredAt || item.sourceDomain ? (
+                <p className="is-size-7 has-text-grey mt-1">
+                  {item.occurredAt ? `Saved ${formatTime(item.occurredAt)}` : ''}
+                  {item.sourceDomain ? ` | via ${item.sourceDomain}` : ''}
+                </p>
               ) : null}
             </div>
             {item.id && onDeleteBookmark ? (
