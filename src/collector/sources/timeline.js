@@ -395,40 +395,54 @@ const fetchDriveFile = async (fileId, accessToken) => {
     } catch (jsonErr) {
       // If standard parse fails, try to extract valid JSON
       console.warn(`[timeline] JSON parse failed, attempting to extract valid JSON from file ${fileId}`);
+      console.warn(`[timeline] Parse error: ${jsonErr.message}`);
       
-      // Try to find the first valid JSON object by looking for the main structure
-      const match = text.match(/\{[\s\S]*"semanticSegments"\s*:\s*\[[\s\S]*?\]\s*\}/);
-      if (match) {
-        try {
-          return JSON.parse(match[0]);
-        } catch (retryErr) {
-          console.error(`[timeline] Failed to parse extracted JSON:`, retryErr.message);
-        }
-      }
-      
-      // Last resort: try to parse just up to the error position if we have it
-      if (jsonErr.message.includes('position')) {
-        const posMatch = jsonErr.message.match(/position (\d+)/);
-        if (posMatch) {
-          const errorPos = parseInt(posMatch[1], 10);
-          console.warn(`[timeline] Attempting to parse JSON up to error position ${errorPos}`);
+      // Strategy 1: Find the semanticSegments array and parse segments individually
+      const segmentsArrayMatch = text.match(/"semanticSegments"\s*:\s*\[/);
+      if (segmentsArrayMatch) {
+        const arrayStartPos = segmentsArrayMatch.index + segmentsArrayMatch[0].length;
+        const afterArray = text.substring(arrayStartPos);
+        
+        // Parse segments one by one until we hit invalid JSON
+        const segments = [];
+        let currentPos = 0;
+        let braceDepth = 0;
+        let segmentStart = -1;
+        
+        for (let i = 0; i < afterArray.length; i++) {
+          const char = afterArray[i];
           
-          // Try to find a valid closing point before the error
-          let truncated = text.substring(0, errorPos);
-          // Find the last complete object/array closing before the error
-          const lastBrace = truncated.lastIndexOf('}');
-          if (lastBrace > 0) {
-            truncated = truncated.substring(0, lastBrace + 1);
-            try {
-              return JSON.parse(truncated);
-            } catch (truncErr) {
-              console.error(`[timeline] Failed to parse truncated JSON:`, truncErr.message);
+          if (char === '{') {
+            if (braceDepth === 0) segmentStart = i;
+            braceDepth++;
+          } else if (char === '}') {
+            braceDepth--;
+            if (braceDepth === 0 && segmentStart >= 0) {
+              // Found a complete segment
+              const segmentText = afterArray.substring(segmentStart, i + 1);
+              try {
+                const segment = JSON.parse(segmentText);
+                segments.push(segment);
+              } catch (parseErr) {
+                // Skip invalid segments
+                console.warn(`[timeline] Skipping invalid segment at position ${arrayStartPos + i}`);
+              }
+              segmentStart = -1;
             }
+          } else if (char === ']' && braceDepth === 0) {
+            // End of array
+            break;
           }
+        }
+        
+        if (segments.length > 0) {
+          console.log(`[timeline] Successfully extracted ${segments.length} segments from partial JSON`);
+          return { semanticSegments: segments };
         }
       }
       
       // All recovery attempts failed
+      console.error(`[timeline] All JSON recovery attempts failed for file ${fileId}`);
       throw new Error(`JSON parse failed: ${jsonErr.message}. File may be corrupted or incomplete.`);
     }
   } catch (err) {
