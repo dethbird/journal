@@ -524,18 +524,29 @@ const GamingSection = ({ section, inCard = false }) => {
         <div className="mt-4">
           <p className="is-size-7 has-text-weight-semibold mb-2">Achievements unlocked:</p>
           {section.achievements.map((achievement, idx) => (
-            <div key={`${achievement.appid}-${achievement.achievementName}-${idx}`} className="mb-2">
-              <p>
-                <span className="mr-1">🏆</span>
-                <span className="has-text-weight-medium">{achievement.achievementName}</span>
-                <span className="has-text-grey is-size-7 ml-2">in {achievement.gameName}</span>
-              </p>
-              {achievement.achievementDescription ? (
-                <p className="is-size-7 has-text-grey ml-4">{achievement.achievementDescription}</p>
-              ) : null}
-              {achievement.unlockedAt ? (
-                <p className="is-size-7 has-text-grey ml-4">{formatAchievementTime(achievement.unlockedAt)}</p>
-              ) : null}
+            <div key={`${achievement.appid}-${achievement.achievementName}-${idx}`} className="mb-2" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+              {achievement.achievementIconUrl ? (
+                <img 
+                  src={achievement.achievementIconUrl} 
+                  alt={achievement.achievementName}
+                  className="achievement-badge"
+                  style={{ width: '64px', height: '64px', objectFit: 'cover', flexShrink: 0 }}
+                />
+              ) : (
+                <span className="mr-1" style={{ fontSize: '2rem' }}>🏆</span>
+              )}
+              <div style={{ flex: 1 }}>
+                <p>
+                  <span className="has-text-weight-medium">{achievement.achievementName}</span>
+                  <span className="has-text-grey is-size-7 ml-2">in {achievement.gameName}</span>
+                </p>
+                {achievement.achievementDescription ? (
+                  <p className="is-size-7 has-text-grey">{achievement.achievementDescription}</p>
+                ) : null}
+                {achievement.unlockedAt ? (
+                  <p className="is-size-7 has-text-grey">{formatAchievementTime(achievement.unlockedAt)}</p>
+                ) : null}
+              </div>
             </div>
           ))}
         </div>

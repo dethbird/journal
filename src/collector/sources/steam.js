@@ -175,6 +175,52 @@ const fetchPlayerAchievements = async (steamId, appid) => {
   }
 };
 
+/**
+ * Fetch achievement schema (includes icon URLs and display names) for a game
+ * @param {number} appid - Steam app ID
+ * @returns {Promise<object>} - Map of achievement API names to { icon, displayName, description }
+ */
+const fetchAchievementSchema = async (appid) => {
+  const cacheKey = `steam:achievement_schema:${appid}`;
+  
+  // Check Redis cache first (schemas don't change often)
+  const cached = await getCached(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  const url = `${API_BASE}/ISteamUserStats/GetSchemaForGame/v2/?key=${apiKey}&appid=${appid}`;
+  
+  try {
+    const res = await fetch(url);
+    
+    if (!res.ok) {
+      return {};
+    }
+    
+    const data = await res.json();
+    const achievements = data.game?.availableGameStats?.achievements || [];
+    
+    // Build a map of apiname -> { icon, displayName, description }
+    const schemaMap = {};
+    for (const achievement of achievements) {
+      schemaMap[achievement.name] = {
+        icon: achievement.icon || null,
+        displayName: achievement.displayName || null,
+        description: achievement.description || null,
+      };
+    }
+    
+    // Cache for 7 days
+    await setCached(cacheKey, schemaMap, CACHE_TTL.ONE_WEEK);
+    
+    return schemaMap;
+  } catch (err) {
+    console.warn(`Failed to fetch achievement schema for appid=${appid}:`, err.message);
+    return {};
+  }
+};
+
 
 
 /**
@@ -274,10 +320,11 @@ const createDailySnapshotEvent = async (appid, metadata, playtime2Weeks, dateKey
  * @param {number} appid - Steam app ID
  * @param {object} metadata - Game metadata
  * @param {object} achievement - Achievement object from API
+ * @param {object|null} schemaData - Schema data with icon, displayName, description
  * @param {string|null} userId - User ID
  * @returns {object} - Event object
  */
-const createAchievementEvent = (appid, metadata, achievement, userId) => {
+const createAchievementEvent = (appid, metadata, achievement, schemaData, userId) => {
   const unlockTime = new Date(achievement.unlocktime * 1000);
   const externalId = `steam:achievement:${appid}:${achievement.apiname}:${achievement.unlocktime}`;
   
@@ -285,9 +332,11 @@ const createAchievementEvent = (appid, metadata, achievement, userId) => {
     appid,
     gameName: metadata.name,
     achievementApiName: achievement.apiname,
-    achievementName: achievement.name || achievement.apiname,
-    achievementDescription: achievement.description || null,
+    achievementName: schemaData?.displayName || achievement.apiname,
+    achievementDescription: schemaData?.description || null,
     unlockedAt: unlockTime.toISOString(),
+    achievementIconUrl: schemaData?.icon || null, // Achievement-specific badge icon
+    gameIcon: metadata.iconUrl, // Game icon for context
     images: {
       iconUrl: metadata.iconUrl,
       logoUrl: metadata.logoUrl,
@@ -391,6 +440,9 @@ const collectAchievements = async (userId, steamId, connectedAccountId) => {
     
     const achievements = await fetchPlayerAchievements(steamId, appid);
     
+    // Fetch achievement schema to get icon URLs
+    const achievementSchema = await fetchAchievementSchema(appid);
+    
     // Find newly unlocked achievements since last check
     const lastCheckedTime = lastChecked.lastCheckedAppIds?.[appid] || oneDayAgo;
     
@@ -399,9 +451,11 @@ const collectAchievements = async (userId, steamId, connectedAccountId) => {
       
       // Only include achievements unlocked since last check (prevents duplicates)
       if (achievement.unlocktime > lastCheckedTime) {
-        const event = createAchievementEvent(appid, metadata, achievement, userId);
+        const schemaData = achievementSchema[achievement.apiname] || null;
+        const event = createAchievementEvent(appid, metadata, achievement, schemaData, userId);
         items.push(event);
-        console.log(`Steam achievement: ${achievement.name || achievement.apiname} in ${metadata.name}`);
+        const displayName = schemaData?.displayName || achievement.apiname;
+        console.log(`Steam achievement: ${displayName} in ${metadata.name}`);
       }
     }
     

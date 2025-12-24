@@ -65,6 +65,7 @@ export const buildSteamSection = (events) => {
         gameName: payload.gameName || `App ${payload.appid}`,
         achievementName: payload.achievementName || payload.achievementApiName || 'Unknown Achievement',
         achievementDescription: payload.achievementDescription || null,
+        achievementIconUrl: payload.achievementIconUrl || null, // Add icon URL
         unlockedAt: payload.unlockedAt || evt.occurredAt?.toISOString?.() || null,
         iconUrl: payload.images?.iconUrl || null,
         storeUrl: payload.storeUrl || null,
