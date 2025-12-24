@@ -12,22 +12,68 @@ const apiKey = process.env.STEAM_API_KEY;
  * Get today's date key in YYYY-MM-DD format (local timezone)
  * @returns {string}
  */
-const getTodayKey = () => {
+/**
+ * Get today's date key in YYYY-MM-DD format for a given timezone
+ * @param {string} timezone - IANA timezone identifier (e.g., "America/New_York")
+ * @returns {string}
+ */
+const getTodayKey = (timezone = 'UTC') => {
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // Format date in the user's timezone
+  const formatter = new Intl.DateTimeFormat('en-CA', { 
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(now); // Returns YYYY-MM-DD
 };
 
 /**
- * Get midnight in local timezone for a date key
+ * Get midnight in a specific timezone for a date key, returned as UTC Date
  * @param {string} dateKey - YYYY-MM-DD format
+ * @param {string} timezone - IANA timezone identifier
  * @returns {Date}
  */
-const getDateMidnight = (dateKey) => {
+const getDateMidnight = (dateKey, timezone = 'UTC') => {
+  // Create an ISO string for midnight in the target timezone
+  // then parse it as if it's local time and convert to UTC
+  const isoString = `${dateKey}T00:00:00`;
+  
+  // For UTC, simple case
+  if (timezone === 'UTC') {
+    return new Date(isoString + 'Z');
+  }
+  
+  // For other timezones, we need to find what UTC time equals midnight in that timezone
+  // Strategy: Start from a guess (UTC midnight) and search nearby hours
   const [year, month, day] = dateKey.split('-').map(Number);
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+  
+  // Check UTC hours from -12 to +14 (to cover all possible timezones)
+  for (let hourOffset = -12; hourOffset <= 14; hourOffset++) {
+    const candidate = new Date(Date.UTC(year, month - 1, day, -hourOffset, 0, 0, 0));
+    
+    // Format this UTC time in the target timezone
+    const formatted = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(candidate);
+    
+    // Check if this corresponds to midnight on our target date
+    const expectedPrefix = `${dateKey}, 00:00`;
+    if (formatted.startsWith(expectedPrefix)) {
+      return candidate;
+    }
+  }
+  
+  // Fallback to UTC if we can't determine
+  console.warn(`Could not determine midnight for ${dateKey} in timezone ${timezone}, using UTC`);
+  return new Date(isoString + 'Z');
 };
 
 /**
@@ -129,51 +175,7 @@ const fetchPlayerAchievements = async (steamId, appid) => {
   }
 };
 
-/**
- * Get or initialize the playtime baseline from Cursor
- * @param {string} cursorSource - Cursor source identifier
- * @param {string|null} connectedAccountId - Connected account ID (null for global)
- * @returns {Promise<{id: string, baselines: object}>}
- */
-const getPlaytimeBaselines = async (cursorSource, connectedAccountId = null) => {
-  const cursorRecord = await prisma.cursor.upsert({
-    where: { 
-      source_connectedAccountId: { 
-        source: cursorSource, 
-        connectedAccountId: connectedAccountId 
-      } 
-    },
-    create: { 
-      source: cursorSource, 
-      connectedAccountId: connectedAccountId,
-      cursor: JSON.stringify({})
-    },
-    update: {},
-  });
-  
-  let baselines = {};
-  if (cursorRecord.cursor) {
-    try {
-      baselines = JSON.parse(cursorRecord.cursor);
-    } catch (err) {
-      console.warn('Failed to parse Steam baselines cursor:', err.message);
-    }
-  }
-  
-  return { id: cursorRecord.id, baselines };
-};
 
-/**
- * Update the playtime baselines in Cursor
- * @param {string} cursorId - Cursor record ID
- * @param {object} baselines - Updated baselines object
- */
-const updatePlaytimeBaselines = async (cursorId, baselines) => {
-  await prisma.cursor.update({
-    where: { id: cursorId },
-    data: { cursor: JSON.stringify(baselines) },
-  });
-};
 
 /**
  * Get or initialize the achievement cursor from Cursor
@@ -222,61 +224,35 @@ const updateAchievementCursor = async (cursorId, lastChecked) => {
 };
 
 /**
- * Create or upsert a daily playtime event
+ * Create a daily snapshot playtime event (once per day per game)
  * @param {number} appid - Steam app ID
  * @param {object} metadata - Game metadata
- * @param {number} deltaMinutes - Minutes played since last check
- * @param {number} currentPlaytime2Weeks - Current playtime_2weeks value
+ * @param {number} playtime2Weeks - Raw playtime_2weeks value from Steam API
  * @param {string} dateKey - YYYY-MM-DD date key
+ * @param {string} timezone - User's timezone
  * @param {string|null} userId - User ID
- * @returns {Promise<object>} - Event object
+ * @returns {Promise<object|null>} - Event object or null if already exists
  */
-const upsertDailyPlaytimeEvent = async (appid, metadata, deltaMinutes, currentPlaytime2Weeks, dateKey, userId) => {
-  const externalId = `steam:play_daily:${appid}:${dateKey}`;
+const createDailySnapshotEvent = async (appid, metadata, playtime2Weeks, dateKey, timezone, userId) => {
+  const externalId = `steam:snapshot:${appid}:${dateKey}`;
   
-  // Check if event already exists
+  // Check if we already collected this game's snapshot today
   const existingEvent = await prisma.event.findUnique({
     where: { source_externalId: { source, externalId } },
   });
   
-  const now = new Date().toISOString();
-  
   if (existingEvent) {
-    // Update existing event
-    const existingPayload = existingEvent.payload || {};
-    const newMinutes = (existingPayload.minutes || 0) + deltaMinutes;
-    
-    const updatedPayload = {
-      ...existingPayload,
-      minutes: newMinutes,
-      lastDeltaMinutes: deltaMinutes,
-      lastObservedPlaytime2Weeks: currentPlaytime2Weeks,
-      updatedAt: now,
-    };
-    
-    const updated = await prisma.event.update({
-      where: { id: existingEvent.id },
-      data: { payload: updatedPayload },
-    });
-    
-    return {
-      eventType: updated.eventType,
-      occurredAt: updated.occurredAt,
-      externalId: updated.externalId,
-      payload: updatedPayload,
-      userId: updated.userId,
-      _updated: true,
-    };
+    // Already collected today, skip
+    return null;
   }
   
-  // Create new event
+  // Create new snapshot event with raw Steam API data
   const payload = {
     appid,
     name: metadata.name,
-    minutes: deltaMinutes,
-    lastDeltaMinutes: deltaMinutes,
-    lastObservedPlaytime2Weeks: currentPlaytime2Weeks,
-    updatedAt: now,
+    playtime_2weeks: playtime2Weeks, // Raw value from Steam API
+    snapshotDate: dateKey,
+    collectedAt: new Date().toISOString(),
     images: {
       iconUrl: metadata.iconUrl,
       logoUrl: metadata.logoUrl,
@@ -285,8 +261,8 @@ const upsertDailyPlaytimeEvent = async (appid, metadata, deltaMinutes, currentPl
   };
   
   return {
-    eventType: 'steam_game_played_daily',
-    occurredAt: getDateMidnight(dateKey),
+    eventType: 'steam_game_snapshot',
+    occurredAt: getDateMidnight(dateKey, timezone),
     externalId,
     payload,
     userId,
@@ -329,17 +305,20 @@ const createAchievementEvent = (appid, metadata, achievement, userId) => {
 };
 
 /**
- * Collect Steam playtime data using daily accumulator model
+ * Collect Steam playtime data as a daily snapshot (once per day per game)
  * @param {string} userId - User ID
  * @param {string} steamId - Steam ID (64-bit)
  * @param {string} connectedAccountId - Connected account ID
+ * @param {string} userTimezone - User's timezone (IANA identifier)
  * @returns {Promise<{items: object[], nextCursor: null}>}
  */
-const collectPlaytime = async (userId, steamId, connectedAccountId) => {
+const collectPlaytime = async (userId, steamId, connectedAccountId, userTimezone = 'UTC') => {
   if (!apiKey || !steamId) {
     console.warn('Steam collector missing STEAM_API_KEY or Steam ID');
     return { items: [], nextCursor: null };
   }
+  
+  const todayKey = getTodayKey(userTimezone);
   
   const games = await fetchRecentlyPlayedGames(steamId);
   
@@ -348,63 +327,36 @@ const collectPlaytime = async (userId, steamId, connectedAccountId) => {
     return { items: [], nextCursor: null };
   }
   
-  const cursorSource = 'steam:playtime_2weeks';
-  const { id: cursorId, baselines } = await getPlaytimeBaselines(cursorSource, connectedAccountId);
-  
-  const todayKey = getTodayKey();
   const items = [];
-  const updatedBaselines = { ...baselines };
   
   for (const game of games) {
     const appid = game.appid;
-    const currentPlaytime2Weeks = game.playtime_2weeks || 0;
-    const previousPlaytime = baselines[appid] || 0;
+    const playtime2Weeks = game.playtime_2weeks || 0;
     
-    // Calculate delta (protect against negative values)
-    const deltaMinutes = Math.max(0, currentPlaytime2Weeks - previousPlaytime);
-    
-    // Update baseline
-    updatedBaselines[appid] = currentPlaytime2Weeks;
-    
-    // Only create/update event if there's actual playtime
-    if (deltaMinutes > 0) {
+    // Only create snapshot for games with actual playtime
+    if (playtime2Weeks > 0) {
       const metadata = await getGameMetadata(game);
-      const event = await upsertDailyPlaytimeEvent(
+      const event = await createDailySnapshotEvent(
         appid,
         metadata,
-        deltaMinutes,
-        currentPlaytime2Weeks,
+        playtime2Weeks,
         todayKey,
+        userTimezone,
         userId
       );
       
-      // Only add to items if it's a new event (not an update)
-      if (!event._updated) {
+      if (event) {
         items.push(event);
+        console.log(`Steam snapshot: ${metadata.name} - ${playtime2Weeks}m (2-week total)`);
       }
-      
-      console.log(`Steam: ${metadata.name} +${deltaMinutes}m (total today: ${event.payload?.minutes || deltaMinutes}m)`);
     }
   }
-  
-  // Clean up old baselines for games not in recent list
-  // Steam's playtime_2weeks resets after 2 weeks of no play
-  const currentAppIds = new Set(games.map(g => g.appid));
-  for (const appid of Object.keys(updatedBaselines)) {
-    if (!currentAppIds.has(Number(appid))) {
-      // Game dropped off the recent list, reset baseline
-      delete updatedBaselines[appid];
-    }
-  }
-  
-  // Save updated baselines
-  await updatePlaytimeBaselines(cursorId, updatedBaselines);
   
   return { items, nextCursor: null };
 };
 
 /**
- * Collect Steam achievements for recently played games
+ * Collect Steam achievements for recently played games (no limits, no enrichment)
  * @param {string} userId - User ID
  * @param {string} steamId - Steam ID (64-bit)
  * @param {string} connectedAccountId - Connected account ID
@@ -430,8 +382,7 @@ const collectAchievements = async (userId, steamId, connectedAccountId) => {
     lastRun: new Date().toISOString() 
   };
   
-  // Only check achievements for games played recently
-  // Use a 24-hour lookback for achievement detection
+  // Check all achievements, no time window limit
   const oneDayAgo = Math.floor(Date.now() / 1000) - (24 * 60 * 60);
   
   for (const game of games) {
@@ -440,13 +391,13 @@ const collectAchievements = async (userId, steamId, connectedAccountId) => {
     
     const achievements = await fetchPlayerAchievements(steamId, appid);
     
-    // Find newly unlocked achievements (within the last 24 hours or since last check)
+    // Find newly unlocked achievements since last check
     const lastCheckedTime = lastChecked.lastCheckedAppIds?.[appid] || oneDayAgo;
     
     for (const achievement of achievements) {
       if (!achievement.achieved || !achievement.unlocktime) continue;
       
-      // Only include achievements unlocked since last check
+      // Only include achievements unlocked since last check (prevents duplicates)
       if (achievement.unlocktime > lastCheckedTime) {
         const event = createAchievementEvent(appid, metadata, achievement, userId);
         items.push(event);
@@ -492,7 +443,12 @@ const collect = async () => {
   for (const { userId, steamId } of steamAccounts) {
     console.log(`Steam collector: fetching data for user ${userId} (Steam ID: ${steamId})...`);
     
-    // Get the connected account to pass its ID to the collectors
+    // Get the user and connected account
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    });
+    
     const connectedAccount = await prisma.connectedAccount.findFirst({
       where: {
         userId,
@@ -507,8 +463,11 @@ const collect = async () => {
       continue;
     }
     
+    const userTimezone = user?.timezone || 'UTC';
+    console.log(`  - Using timezone: ${userTimezone}`);
+    
     console.log('  - Fetching playtime data...');
-    const playtimeResult = await collectPlaytime(userId, steamId, connectedAccount.id);
+    const playtimeResult = await collectPlaytime(userId, steamId, connectedAccount.id, userTimezone);
     
     console.log('  - Checking for new achievements...');
     const achievementResult = await collectAchievements(userId, steamId, connectedAccount.id);

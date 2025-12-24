@@ -757,6 +757,142 @@ function TrelloSettingsForm() {
   );
 }
 
+function UserGeneralSettings() {
+  const [settings, setSettings] = useState({
+    timezone: 'UTC',
+    displayName: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState(null);
+  const [error, setError] = useState(null);
+
+  // List of common timezones
+  const timezones = [
+    'UTC',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Anchorage',
+    'Pacific/Honolulu',
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Europe/Moscow',
+    'Asia/Dubai',
+    'Asia/Kolkata',
+    'Asia/Shanghai',
+    'Asia/Tokyo',
+    'Asia/Seoul',
+    'Australia/Sydney',
+    'Pacific/Auckland',
+  ];
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch('/api/user/settings', { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          setSettings({
+            timezone: data.timezone || 'UTC',
+            displayName: data.displayName || '',
+          });
+        }
+      } catch (e) {
+        console.error('Failed to load user settings', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const res = await fetch('/api/user/settings', {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Save failed (${res.status})`);
+      }
+      const data = await res.json();
+      setSettings({
+        timezone: data.timezone || 'UTC',
+        displayName: data.displayName || '',
+      });
+      setMessage('Settings saved successfully');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage(null), 2500);
+    }
+  };
+
+  if (loading) return <p className="subtitle">Loading settings…</p>;
+
+  return (
+    <div className="box">
+      <p className="is-size-5 has-text-weight-semibold">General Settings</p>
+      <form className="mt-3" onSubmit={handleSubmit}>
+        <div className="field">
+          <label className="label">Display Name</label>
+          <div className="control">
+            <input
+              className="input"
+              type="text"
+              value={settings.displayName}
+              onChange={(e) => setSettings({ ...settings, displayName: e.target.value })}
+              placeholder="Your name"
+            />
+          </div>
+        </div>
+
+        <div className="field">
+          <label className="label">Timezone</label>
+          <div className="control">
+            <div className="select is-fullwidth">
+              <select
+                value={settings.timezone}
+                onChange={(e) => setSettings({ ...settings, timezone: e.target.value })}
+              >
+                {timezones.map((tz) => (
+                  <option key={tz} value={tz}>
+                    {tz}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <p className="help">
+            Used for Steam snapshots and other daily collection activities. Data is stored in UTC.
+          </p>
+        </div>
+
+        <div className="field is-grouped">
+          <div className="control">
+            <button className={`button is-primary${saving ? ' is-loading' : ''}`} type="submit">
+              Save
+            </button>
+          </div>
+          {message && <p className="help is-success">{message}</p>}
+          {error && <p className="help is-danger">{error}</p>}
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Settings({ user, onDisconnect }) {
   const connectedAccounts = user?.connectedAccounts || [];
   const googleConnected = connectedAccounts.some((acc) => acc.provider === 'google');
@@ -780,6 +916,9 @@ export default function Settings({ user, onDisconnect }) {
   return (
     <div>
       <h1 className="title is-3">Settings</h1>
+      
+      <UserGeneralSettings />
+      
       <div className="box">
         <p className="is-size-5 has-text-weight-semibold">Connected accounts</p>
         <div className="mt-2">

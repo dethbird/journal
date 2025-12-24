@@ -22,30 +22,28 @@ const formatDurationMinutes = (minutes) => {
 export const buildSteamSection = (events) => {
   if (!events?.length) return null;
 
-  const playtimeEvents = events.filter(e => e.eventType === 'steam_game_played_daily');
+  const snapshotEvents = events.filter(e => e.eventType === 'steam_game_snapshot');
   const achievementEvents = events.filter(e => e.eventType === 'steam_achievement_unlocked');
 
-  // Aggregate playtime by game
-  const gamePlaytime = new Map();
-  let totalMinutes = 0;
-
-  for (const evt of playtimeEvents) {
+  // Parse all games from snapshot events (one event per game)
+  const games = [];
+  let snapshotDate = null;
+  
+  for (const evt of snapshotEvents) {
     const payload = evt.payload ?? {};
-    const appid = payload.appid;
-    const minutes = payload.minutes || 0;
-
-    if (!appid) continue;
-
-    totalMinutes += minutes;
-
-    if (gamePlaytime.has(appid)) {
-      const existing = gamePlaytime.get(appid);
-      existing.minutes += minutes;
-    } else {
-      gamePlaytime.set(appid, {
-        appid,
-        name: payload.name || `App ${appid}`,
-        minutes,
+    const playtime2Weeks = payload.playtime_2weeks || 0;
+    
+    // Track the most recent snapshot date
+    if (payload.snapshotDate && (!snapshotDate || payload.snapshotDate > snapshotDate)) {
+      snapshotDate = payload.snapshotDate;
+    }
+    
+    if (playtime2Weeks > 0) {
+      games.push({
+        appid: payload.appid,
+        name: payload.name || `App ${payload.appid}`,
+        playtime_2weeks: playtime2Weeks,
+        durationLabel: formatDurationMinutes(playtime2Weeks),
         iconUrl: payload.images?.iconUrl || null,
         logoUrl: payload.images?.logoUrl || null,
         storeUrl: payload.storeUrl || null,
@@ -53,16 +51,12 @@ export const buildSteamSection = (events) => {
     }
   }
 
-  // Sort games by playtime descending
-  const topGames = [...gamePlaytime.values()]
-    .sort((a, b) => b.minutes - a.minutes)
-    .slice(0, MAX_GAMES)
-    .map((game) => ({
-      ...game,
-      durationLabel: formatDurationMinutes(game.minutes),
-    }));
+  // Sort games by playtime descending and limit
+  const topGames = games
+    .sort((a, b) => b.playtime_2weeks - a.playtime_2weeks)
+    .slice(0, MAX_GAMES);
 
-  // Process achievements
+  // Process achievements (keep existing logic, no aggregation needed)
   const achievements = achievementEvents
     .map((evt) => {
       const payload = evt.payload ?? {};
@@ -103,17 +97,8 @@ export const buildSteamSection = (events) => {
   const achievementSummary = [...achievementsByGame.values()]
     .sort((a, b) => b.count - a.count);
 
-  // Calculate time range
-  let first = null;
-  let last = null;
-
-  for (const evt of events) {
-    const occurredAt = evt.occurredAt ? new Date(evt.occurredAt) : null;
-    if (occurredAt && !Number.isNaN(occurredAt.getTime())) {
-      if (!first || occurredAt < first) first = occurredAt;
-      if (!last || occurredAt > last) last = occurredAt;
-    }
-  }
+  // Calculate total minutes from the snapshot (raw Steam API value)
+  const totalMinutes = topGames.reduce((sum, game) => sum + game.playtime_2weeks, 0);
 
   // Don't return section if no meaningful data
   if (topGames.length === 0 && achievements.length === 0) {
@@ -125,11 +110,10 @@ export const buildSteamSection = (events) => {
     summary: {
       totalMinutes,
       totalDurationLabel: formatDurationMinutes(totalMinutes),
-      gamesPlayed: gamePlaytime.size,
+      gamesPlayed: games.length,
       achievementsUnlocked: achievementEvents.length,
       achievementSummary,
-      firstActivity: first ? first.toISOString() : null,
-      lastActivity: last ? last.toISOString() : null,
+      snapshotDate, // Date of the snapshot
     },
     topGames,
     achievements,

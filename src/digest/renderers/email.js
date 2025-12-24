@@ -195,6 +195,13 @@ const renderTrello = (section) => {
 const renderGaming = (section) => {
   const summary = section.summary ?? {};
   const summaryParts = [];
+  
+  // Add snapshot date information if available
+  const snapshotNote = summary.snapshotDate 
+    ? `Snapshot from ${summary.snapshotDate}`
+    : 'Last 2 weeks per Steam';
+  summaryParts.push(snapshotNote);
+  
   if (summary.gamesPlayed) summaryParts.push(`${summary.gamesPlayed} games`);
   if (summary.totalDurationLabel) summaryParts.push(summary.totalDurationLabel);
   if (summary.achievementsUnlocked) summaryParts.push(`${summary.achievementsUnlocked} achievements`);
@@ -204,11 +211,12 @@ const renderGaming = (section) => {
       const storeLink = game.storeUrl
         ? `<a href="${escapeHtml(game.storeUrl)}">${escapeHtml(game.name)}</a>`
         : escapeHtml(game.name);
+      const playtime = game.durationLabel || `${game.playtime_2weeks || game.minutes}m`;
       return `
         <div class="card game">
           ${game.iconUrl ? `<div class="thumb"><img src="${escapeHtml(game.iconUrl)}" alt=""/></div>` : ''}
           <div class="title">${storeLink}</div>
-          <div class="meta">${escapeHtml(game.durationLabel || `${game.minutes}m`)}</div>
+          <div class="meta">${escapeHtml(playtime)}</div>
         </div>
       `;
     })

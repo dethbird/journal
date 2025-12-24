@@ -956,6 +956,79 @@ app.get('/api/openid/steam/callback', async (request, reply) => {
   }
 });
 
+/**
+ * GET /api/user/settings
+ * Get current user's settings
+ */
+app.get('/api/user/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) {
+    return reply.status(401).send({ error: 'Not authenticated' });
+  }
+
+  const userData = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      timezone: true,
+    },
+  });
+
+  return userData;
+});
+
+/**
+ * PATCH /api/user/settings
+ * Update current user's settings
+ */
+app.patch('/api/user/settings', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) {
+    return reply.status(401).send({ error: 'Not authenticated' });
+  }
+
+  const { timezone, displayName } = request.body;
+  const updates = {};
+
+  if (timezone !== undefined) {
+    // Validate timezone
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+      updates.timezone = timezone;
+    } catch (e) {
+      return reply.status(400).send({ error: 'Invalid timezone' });
+    }
+  }
+
+  if (displayName !== undefined) {
+    updates.displayName = displayName;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return reply.status(400).send({ error: 'No valid fields to update' });
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: updates,
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        timezone: true,
+      },
+    });
+
+    return updated;
+  } catch (err) {
+    request.log.error(err, 'Failed to update user settings');
+    return reply.status(500).send({ error: 'Failed to update settings' });
+  }
+});
+
 app.get('/api/digest', async (request, reply) => {
   const user = await getSessionUser(request);
   if (!user) {

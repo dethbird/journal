@@ -70,11 +70,14 @@ const renderGaming = (section) => {
     lines.push(`• ${summaryParts.join(' · ')}`);
   }
 
-  // Top games by playtime
+  // Top games by playtime - show as snapshot
   if ((section.topGames ?? []).length) {
-    lines.push('Games played:');
+    const snapshotLabel = summary.snapshotDate 
+      ? `Recent gameplay (last 2 weeks per Steam, as of ${summary.snapshotDate}):`
+      : 'Recent gameplay (last 2 weeks per Steam):';
+    lines.push(snapshotLabel);
     for (const game of section.topGames) {
-      lines.push(`  • ${game.name}: ${game.durationLabel || `${game.minutes}m`}`);
+      lines.push(`  • ${game.name}: ${game.durationLabel || `${game.playtime_2weeks}m`}`);
     }
   }
 

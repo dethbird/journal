@@ -80,6 +80,7 @@ model User {
   id                String             @id @default(cuid())
   email             String?            @unique
   displayName       String?
+  timezone          String?            @default("UTC") // IANA timezone identifier (e.g., "America/New_York")
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   authIdentities    AuthIdentity[]
