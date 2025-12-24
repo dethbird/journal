@@ -202,6 +202,8 @@ const MusicSection = ({ section, inCard = false }) => {
   if (!section) return null;
   const summary = section.summary ?? {};
 
+  
+
   const content = (
     <>
       <p className="is-size-6">
@@ -462,6 +464,10 @@ const GamingSection = ({ section, inCard = false }) => {
   if (!section) return null;
   const summary = section.summary ?? {};
 
+  const snapshotLabel = summary.snapshotDate
+    ? `Recent gameplay (last 2 weeks per Steam, as of ${summary.snapshotDate}):`
+    : 'Recent gameplay (last 2 weeks per Steam):';
+
   const formatAchievementTime = (iso) => {
     if (!iso) return '';
     try {
@@ -481,7 +487,7 @@ const GamingSection = ({ section, inCard = false }) => {
 
       {section.topGames?.length ? (
         <div className="mt-3">
-          <p className="is-size-7 has-text-weight-semibold mb-2">Games played:</p>
+          <p className="is-size-7 has-text-weight-semibold mb-2">{snapshotLabel}</p>
           {section.topGames.map((game) => (
             <div key={game.appid} className="mb-2 is-flex is-align-items-center">
               {game.iconUrl ? (
