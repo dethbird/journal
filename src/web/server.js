@@ -847,8 +847,14 @@ app.get('/api/oauth/google/callback', async (request, reply) => {
   }
 });
 
-// Steam OpenID Authentication
+// Steam OpenID Connection (must be already logged in)
 app.get('/api/openid/steam/start', async (request, reply) => {
+  // Require user to be logged in
+  const user = await getSessionUser(request);
+  if (!user) {
+    return reply.status(401).send({ error: 'You must be logged in to connect Steam' });
+  }
+
   const returnTo = process.env.STEAM_RETURN_URL || `http://localhost:${process.env.PORT || 3000}/api/openid/steam/callback`;
   const realm = process.env.STEAM_REALM || `http://localhost:${process.env.PORT || 3000}`;
   
@@ -866,6 +872,12 @@ app.get('/api/openid/steam/start', async (request, reply) => {
 });
 
 app.get('/api/openid/steam/callback', async (request, reply) => {
+  // Require user to be logged in
+  const user = await getSessionUser(request);
+  if (!user) {
+    return reply.status(401).send({ error: 'You must be logged in to connect Steam' });
+  }
+
   const { query } = request;
   
   // Verify the OpenID response
@@ -925,12 +937,7 @@ app.get('/api/openid/steam/callback', async (request, reply) => {
       }
     }
 
-    // Find or create user and connected account
-    const user = await findOrCreateUserFromConnectedAccount({
-      email: null, // Steam doesn't provide email via OpenID
-      displayName,
-    });
-
+    // Connect Steam to the current logged-in user
     const connected = await upsertConnectedAccount(
       user.id,
       'steam',
@@ -939,18 +946,10 @@ app.get('/api/openid/steam/callback', async (request, reply) => {
       null // No scopes for OpenID
     );
 
-    request.log.info({ userId: user.id, steamId, displayName }, 'Steam OpenID authentication successful');
+    request.log.info({ userId: user.id, steamId, displayName }, 'Steam connected to existing user');
 
-    // Set session cookie
-    const signed = signSession(user.id);
-    reply.setCookie('journal_auth', signed, {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-    });
-
-    return reply.redirect('/');
+    // Redirect back to settings
+    return reply.redirect('/settings');
   } catch (err) {
     request.log.error(err, 'Steam OpenID callback failed');
     return reply.status(500).send({ error: err?.message ?? String(err) });
