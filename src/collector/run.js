@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import prisma from '../lib/prismaClient.js';
+import { disconnectRedis } from '../lib/redisClient.js';
 import './sources/github.js';
 import './sources/emailBookmarks.js';
 import './sources/spotify.js';
@@ -105,11 +106,19 @@ const handleRun = async () => {
     }
   } finally {
     await prisma.$disconnect();
+    await disconnectRedis();
   }
 };
 
 if (path.resolve(process.argv[1] ?? '') === entryFile) {
-  handleRun();
+  handleRun()
+    .then(() => {
+      process.exit(process.exitCode || 0);
+    })
+    .catch((err) => {
+      console.error('Fatal error in collector:', err);
+      process.exit(1);
+    });
 }
 
 export default handleRun;

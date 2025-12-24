@@ -9,21 +9,25 @@ const API_BASE = 'https://api.steampowered.com';
 const apiKey = process.env.STEAM_API_KEY;
 
 /**
- * Get today's date key in YYYY-MM-DD format
+ * Get today's date key in YYYY-MM-DD format (local timezone)
  * @returns {string}
  */
 const getTodayKey = () => {
   const now = new Date();
-  return now.toISOString().slice(0, 10);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 /**
- * Get midnight UTC for a date key
+ * Get midnight in local timezone for a date key
  * @param {string} dateKey - YYYY-MM-DD format
  * @returns {Date}
  */
 const getDateMidnight = (dateKey) => {
-  return new Date(`${dateKey}T00:00:00.000Z`);
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
 };
 
 /**
