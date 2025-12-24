@@ -49,11 +49,13 @@ if (CACHE_ENABLED) {
 export const CACHE_KEYS = {
   ARTIST: 'spotify:artist:',
   ALBUM: 'spotify:album:',
+  STEAM_APP: 'steam:app:',
 };
 
 export const CACHE_TTL = {
   ARTIST: 86400 * 7, // 7 days
   ALBUM: 86400 * 7, // 7 days
+  STEAM_APP: 86400 * 30, // 30 days - games don't change often
 };
 
 /**

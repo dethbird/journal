@@ -21,6 +21,7 @@ Lightweight personal journal, timeline ingestors, and daily digest renderer. Sto
    - Google OAuth credentials (Drive access) or service account with Drive API access
    - GitHub OAuth app (for GitHub activity collection)
    - Spotify OAuth app (for recently played tracks)
+   - Steam Web API key (for game playtime and achievements)
    - Trello API key and token (for board activity collection)
 
 ## Quick Start — Development
@@ -73,6 +74,10 @@ GITHUB_CLIENT_SECRET=...
 # Spotify OAuth (for recently played tracks)
 SPOTIFY_CLIENT_ID=...
 SPOTIFY_CLIENT_SECRET=...
+
+# Steam Web API (for game playtime and achievements)
+STEAM_API_KEY=...
+STEAM_ID=...  # Your 64-bit Steam ID
 
 # Trello API (for board activity collection)
 TRELLO_API_KEY=...

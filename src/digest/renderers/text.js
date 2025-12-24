@@ -57,6 +57,38 @@ const renderMusic = (section) => {
   return lines;
 };
 
+const renderGaming = (section) => {
+  const lines = [formatLine('Steam')];
+  const summary = section.summary ?? {};
+  
+  // Summary line
+  const summaryParts = [];
+  if (summary.gamesPlayed) summaryParts.push(`${summary.gamesPlayed} games`);
+  if (summary.totalDurationLabel) summaryParts.push(summary.totalDurationLabel);
+  if (summary.achievementsUnlocked) summaryParts.push(`${summary.achievementsUnlocked} achievements`);
+  if (summaryParts.length) {
+    lines.push(`• ${summaryParts.join(' · ')}`);
+  }
+
+  // Top games by playtime
+  if ((section.topGames ?? []).length) {
+    lines.push('Games played:');
+    for (const game of section.topGames) {
+      lines.push(`  • ${game.name}: ${game.durationLabel || `${game.minutes}m`}`);
+    }
+  }
+
+  // Recent achievements
+  if ((section.achievements ?? []).length) {
+    lines.push('Achievements unlocked:');
+    for (const achievement of section.achievements) {
+      lines.push(`  🏆 ${achievement.achievementName} (${achievement.gameName})`);
+    }
+  }
+
+  return lines;
+};
+
 export const renderTextDigest = (vm) => {
   const lines = [];
   lines.push('Daily Digest');
@@ -75,6 +107,8 @@ export const renderTextDigest = (vm) => {
       lines.push(...renderBookmarks(section));
     } else if (section.kind === 'music') {
       lines.push(...renderMusic(section));
+    } else if (section.kind === 'gaming') {
+      lines.push(...renderGaming(section));
     }
   }
 

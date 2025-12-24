@@ -192,6 +192,50 @@ const renderTrello = (section) => {
   `;
 };
 
+const renderGaming = (section) => {
+  const summary = section.summary ?? {};
+  const summaryParts = [];
+  if (summary.gamesPlayed) summaryParts.push(`${summary.gamesPlayed} games`);
+  if (summary.totalDurationLabel) summaryParts.push(summary.totalDurationLabel);
+  if (summary.achievementsUnlocked) summaryParts.push(`${summary.achievementsUnlocked} achievements`);
+
+  const games = (section.topGames ?? [])
+    .map((game) => {
+      const storeLink = game.storeUrl
+        ? `<a href="${escapeHtml(game.storeUrl)}">${escapeHtml(game.name)}</a>`
+        : escapeHtml(game.name);
+      return `
+        <div class="card game">
+          ${game.iconUrl ? `<div class="thumb"><img src="${escapeHtml(game.iconUrl)}" alt=""/></div>` : ''}
+          <div class="title">${storeLink}</div>
+          <div class="meta">${escapeHtml(game.durationLabel || `${game.minutes}m`)}</div>
+        </div>
+      `;
+    })
+    .join('');
+
+  const achievements = (section.achievements ?? [])
+    .map((achievement) => {
+      const unlockedAt = achievement.unlockedAt
+        ? new Date(achievement.unlockedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+        : '';
+      return `
+        <div class="card-item">
+          <div>🏆 ${escapeHtml(achievement.achievementName)} <span class="muted">in ${escapeHtml(achievement.gameName)}</span></div>
+          ${unlockedAt ? `<div class="meta">${escapeHtml(unlockedAt)}</div>` : ''}
+        </div>
+      `;
+    })
+    .join('');
+
+  return `
+    <h3>Steam</h3>
+    <div class="summary">${escapeHtml(summaryParts.join(' · '))}</div>
+    ${games ? `<div class="cards">${games}</div>` : ''}
+    ${achievements ? `<div class="card"><div class="title">Achievements</div>${achievements}</div>` : ''}
+  `;
+};
+
 const baseStyle = `
   body { font-family: Arial, sans-serif; background: #f7f7f9; color: #1f2933; margin: 0; padding: 24px; }
   .wrapper { max-width: 640px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 8px; border: 1px solid #e5e7eb; }
@@ -237,6 +281,7 @@ export const renderEmailBaseHtml = (vm) => {
       if (section.kind === 'github') return renderGithub(section);
       if (section.kind === 'bookmarks') return renderBookmarks(section);
       if (section.kind === 'music') return renderMusic(section);
+      if (section.kind === 'gaming') return renderGaming(section);
       if (section.kind === 'timeline') return renderTimeline(section);
       if (section.kind === 'trello') return renderTrello(section);
       return '';

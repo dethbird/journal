@@ -6,6 +6,7 @@ import prisma from '../lib/prismaClient.js';
 import './sources/github.js';
 import './sources/emailBookmarks.js';
 import './sources/spotify.js';
+import './sources/steam.js';
 import './sources/timeline.js';
 import './sources/trello.js';
 import { runCollectorCycle } from './runner.js';
