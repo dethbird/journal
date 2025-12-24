@@ -2,6 +2,7 @@ import prisma from '../lib/prismaClient.js';
 import buildGithubSection from './sections/github.js';
 import buildBookmarksSection from './sections/bookmarks.js';
 import buildSpotifySection from './sections/spotify.js';
+import buildSteamSection from './sections/steam.js';
 import buildTimelineSection from './sections/timeline.js';
 import buildTrelloSection from './sections/trello.js';
 
@@ -43,6 +44,10 @@ export const buildDigestViewModel = async ({ since = null, until = null, userId 
   }
   if (grouped.has('spotify')) {
     const section = buildSpotifySection(grouped.get('spotify'));
+    if (section) sections.push(section);
+  }
+  if (grouped.has('steam')) {
+    const section = buildSteamSection(grouped.get('steam'));
     if (section) sections.push(section);
   }
   if (grouped.has('google_timeline')) {

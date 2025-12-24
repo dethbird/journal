@@ -4,6 +4,7 @@ import trelloIcon from '../assets/trello.ico';
 import githubIcon from '../assets/github.ico';
 import goalsIcon from '../assets/goals.ico';
 import spotifyIcon from '../assets/spotify.ico';
+import steamIcon from '../assets/steam.ico';
 import timelineIcon from '../assets/timeline.ico';
 import journalIcon from '../assets/journal.ico';
 import bookmarksIcon from '../assets/bookmarks.ico';
@@ -457,6 +458,98 @@ const TrelloSection = ({ section, inCard = false }) => {
   );
 };
 
+const GamingSection = ({ section, inCard = false }) => {
+  if (!section) return null;
+  const summary = section.summary ?? {};
+
+  const formatAchievementTime = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    } catch (e) {
+      return iso;
+    }
+  };
+
+  const content = (
+    <>
+      <p className="is-size-6">
+        {summary.gamesPlayed ?? 0} games
+        {summary.totalDurationLabel ? ` · ${summary.totalDurationLabel}` : ''}
+        {summary.achievementsUnlocked ? ` · ${summary.achievementsUnlocked} achievements` : ''}
+      </p>
+
+      {section.topGames?.length ? (
+        <div className="mt-3">
+          <p className="is-size-7 has-text-weight-semibold mb-2">Games played:</p>
+          {section.topGames.map((game) => (
+            <div key={game.appid} className="mb-2 is-flex is-align-items-center">
+              {game.iconUrl ? (
+                <div className="mr-3">
+                  {game.storeUrl ? (
+                    <a href={game.storeUrl} target="_blank" rel="noreferrer">
+                      <img src={game.iconUrl} alt="" className="game-icon" style={{ width: '32px', height: '32px', borderRadius: '4px' }} />
+                    </a>
+                  ) : (
+                    <img src={game.iconUrl} alt="" className="game-icon" style={{ width: '32px', height: '32px', borderRadius: '4px' }} />
+                  )}
+                </div>
+              ) : null}
+              <div>
+                <p className="has-text-weight-semibold">
+                  {game.storeUrl ? (
+                    <a href={game.storeUrl} target="_blank" rel="noreferrer">
+                      {game.name}
+                    </a>
+                  ) : (
+                    game.name
+                  )}
+                </p>
+                <p className="is-size-7 has-text-grey">{game.durationLabel || `${game.minutes}m`}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="has-text-grey mt-2">No games played</p>
+      )}
+
+      {section.achievements?.length ? (
+        <div className="mt-4">
+          <p className="is-size-7 has-text-weight-semibold mb-2">Achievements unlocked:</p>
+          {section.achievements.map((achievement, idx) => (
+            <div key={`${achievement.appid}-${achievement.achievementName}-${idx}`} className="mb-2">
+              <p>
+                <span className="mr-1">🏆</span>
+                <span className="has-text-weight-medium">{achievement.achievementName}</span>
+                <span className="has-text-grey is-size-7 ml-2">in {achievement.gameName}</span>
+              </p>
+              {achievement.achievementDescription ? (
+                <p className="is-size-7 has-text-grey ml-4">{achievement.achievementDescription}</p>
+              ) : null}
+              {achievement.unlockedAt ? (
+                <p className="is-size-7 has-text-grey ml-4">{formatAchievementTime(achievement.unlockedAt)}</p>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (inCard) return <div>{content}</div>;
+
+  return (
+    <div className="box">
+      <p className="title is-5">
+        <img src={steamIcon} alt="Steam" className="section-icon" />
+        Steam
+      </p>
+      {content}
+    </div>
+  );
+};
+
 const JournalSection = ({ logs, goals, onToggleGoal }) => {
   const formatLogTime = (iso) => {
     if (!iso) return '';
@@ -696,8 +789,9 @@ export default function Digest({ offsetDays = 0, onWeather }) {
           const github = vm.sections?.find((s) => s.kind === 'github') ?? null;
           const trello = vm.sections?.find((s) => s.kind === 'trello') ?? null;
           const music = vm.sections?.find((s) => s.kind === 'music') ?? null;
+          const gaming = vm.sections?.find((s) => s.kind === 'gaming') ?? null;
           const timeline = vm.sections?.find((s) => s.kind === 'timeline') ?? null;
-          const other = (vm.sections || []).filter((s) => !['github', 'trello', 'music', 'timeline'].includes(s.kind));
+          const other = (vm.sections || []).filter((s) => !['github', 'trello', 'music', 'gaming', 'timeline'].includes(s.kind));
 
           let delayCounter = 0.1;
 
@@ -750,6 +844,24 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                     )}
                   </div>
                   <div className="column is-12-mobile is-6-desktop">
+                    {gaming ? (
+                      <GamingSection section={gaming} />
+                    ) : (
+                      <div className="box">
+                        <p className="title is-5">
+                          <img src={steamIcon} alt="Steam" className="section-icon" />
+                          Steam
+                        </p>
+                        <p className="has-text-grey">No gaming activity</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </AnimatedSection>
+
+              <AnimatedSection delay={delayCounter + 0.2}>
+                <div className="columns is-multiline">
+                  <div className="column is-12-mobile is-6-desktop">
                     {timeline ? (
                       <TimelineSection section={timeline} />
                     ) : (
@@ -762,12 +874,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                       </div>
                     )}
                   </div>
-                </div>
-              </AnimatedSection>
-
-              <AnimatedSection delay={delayCounter + 0.2}>
-                <div className="columns is-multiline">
-                  <div className="column is-12">
+                  <div className="column is-12-mobile is-6-desktop">
                     {(() => {
                       const bookmarks = vm.sections?.find((s) => s.kind === 'bookmarks') ?? null;
                       return bookmarks ? (
