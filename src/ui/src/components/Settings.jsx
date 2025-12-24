@@ -1,5 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { CONNECT_PROVIDERS } from '../constants';
+import githubIcon from '../assets/github.ico';
+import spotifyIcon from '../assets/spotify.ico';
+import steamIcon from '../assets/steam.ico';
+import googleIcon from '../assets/google.ico';
+
+const PROVIDER_ICONS = {
+  github: githubIcon,
+  spotify: spotifyIcon,
+  steam: steamIcon,
+  google: googleIcon,
+};
 
 const formatDateTime = (value) => {
   if (!value) return '';
@@ -11,25 +22,37 @@ const formatDateTime = (value) => {
 };
 
 function ConnectedAccountRow({ provider, connected, onDisconnect }) {
+  const iconSrc = PROVIDER_ICONS[provider.id];
+  
   return (
     <div className="box">
       <div className="level">
         <div className="level-left">
-          <div>
-            <p className="is-size-6 has-text-weight-semibold">{provider.name}</p>
-            <p>{connected.displayName || connected.providerAccountId}</p>
-            {connected.scopes && (
-              <div className="scope-tags">
-                {connected.scopes
-                  .split(/\s+/)
-                  .filter(Boolean)
-                  .map((s, i) => (
-                    <span key={i} className="scope-tag is-size-7 has-text-grey">
-                      {s}
-                    </span>
-                  ))}
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            {iconSrc && (
+              <img 
+                src={iconSrc} 
+                alt={provider.name} 
+                className="section-icon"
+                style={{ width: '32px', height: '32px' }}
+              />
             )}
+            <div>
+              <p className="is-size-6 has-text-weight-semibold">{provider.name}</p>
+              <p>{connected.displayName || connected.providerAccountId}</p>
+              {connected.scopes && (
+                <div className="scope-tags">
+                  {connected.scopes
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .map((s, i) => (
+                      <span key={i} className="scope-tag is-size-7 has-text-grey">
+                        {s}
+                      </span>
+                    ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div className="level-right">
@@ -897,6 +920,7 @@ export default function Settings({ user, onDisconnect }) {
   const connectedAccounts = user?.connectedAccounts || [];
   const googleConnected = connectedAccounts.some((acc) => acc.provider === 'google');
   const [googleClientId, setGoogleClientId] = useState(null);
+  const [activeTab, setActiveTab] = useState('general');
 
   useEffect(() => {
     const loadClientId = async () => {
@@ -917,33 +941,88 @@ export default function Settings({ user, onDisconnect }) {
     <div>
       <h1 className="title is-3">Settings</h1>
       
-      <UserGeneralSettings />
-      
-      <div className="box">
-        <p className="is-size-5 has-text-weight-semibold">Connected accounts</p>
-        <div className="mt-2">
-          {CONNECT_PROVIDERS.map((p) => {
-            const connected = connectedAccounts.find((acc) => acc.provider === p.id);
-            if (connected) return <ConnectedAccountRow key={p.id} provider={p} connected={connected} onDisconnect={onDisconnect} />;
-
-            return (
-              <div key={p.id} className="mt-2">
-                <a className="button is-primary" href={p.start}>
-                  <span className="icon">
-                    <i className={`fa-brands fa-${p.id}`} />
-                  </span>
-                  <span>Authorize {p.name}</span>
-                </a>
-              </div>
-            );
-          })}
-        </div>
+      <div className="tabs is-boxed">
+        <ul>
+          <li className={activeTab === 'general' ? 'is-active' : ''}>
+            <a onClick={() => setActiveTab('general')}>
+              <span className="icon is-small"><i className="fa-solid fa-user" /></span>
+              <span>General</span>
+            </a>
+          </li>
+          <li className={activeTab === 'accounts' ? 'is-active' : ''}>
+            <a onClick={() => setActiveTab('accounts')}>
+              <span className="icon is-small"><i className="fa-solid fa-link" /></span>
+              <span>Connected Accounts</span>
+            </a>
+          </li>
+          <li className={activeTab === 'google' ? 'is-active' : ''}>
+            <a onClick={() => setActiveTab('google')}>
+              <span className="icon is-small"><i className="fa-brands fa-google" /></span>
+              <span>Google Timeline</span>
+            </a>
+          </li>
+          <li className={activeTab === 'trello' ? 'is-active' : ''}>
+            <a onClick={() => setActiveTab('trello')}>
+              <span className="icon is-small"><i className="fa-brands fa-trello" /></span>
+              <span>Trello</span>
+            </a>
+          </li>
+          <li className={activeTab === 'email-delivery' ? 'is-active' : ''}>
+            <a onClick={() => setActiveTab('email-delivery')}>
+              <span className="icon is-small"><i className="fa-solid fa-envelope" /></span>
+              <span>Email Delivery</span>
+            </a>
+          </li>
+          <li className={activeTab === 'email-bookmarks' ? 'is-active' : ''}>
+            <a onClick={() => setActiveTab('email-bookmarks')}>
+              <span className="icon is-small"><i className="fa-solid fa-bookmark" /></span>
+              <span>Email Bookmarks</span>
+            </a>
+          </li>
+        </ul>
       </div>
 
-      <GoogleTimelineSettingsForm connected={googleConnected} googleClientId={googleClientId} />
-      <TrelloSettingsForm />
-      <EmailDeliverySettingsForm />
-      <EmailBookmarkSettingsForm />
+      {activeTab === 'general' && <UserGeneralSettings />}
+      
+      {activeTab === 'accounts' && (
+        <div className="box">
+          <p className="is-size-5 has-text-weight-semibold mb-4">Connected accounts</p>
+          <div className="mt-2">
+            {CONNECT_PROVIDERS.map((p) => {
+              const connected = connectedAccounts.find((acc) => acc.provider === p.id);
+              if (connected) return <ConnectedAccountRow key={p.id} provider={p} connected={connected} onDisconnect={onDisconnect} />;
+
+              const iconSrc = PROVIDER_ICONS[p.id];
+              
+              return (
+                <div key={p.id} className="mt-2">
+                  <a className="button is-primary" href={p.start}>
+                    {iconSrc ? (
+                      <span className="icon">
+                        <img 
+                          src={iconSrc} 
+                          alt={p.name} 
+                          style={{ width: '20px', height: '20px', objectFit: 'cover' }}
+                        />
+                      </span>
+                    ) : (
+                      <span className="icon">
+                        <i className={`fa-brands fa-${p.id}`} />
+                      </span>
+                    )}
+                    <span>Authorize {p.name}</span>
+                  </a>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'google' && <GoogleTimelineSettingsForm connected={googleConnected} googleClientId={googleClientId} />}
+      {activeTab === 'trello' && <TrelloSettingsForm />}
+      {activeTab === 'email-delivery' && <EmailDeliverySettingsForm />}
+      {activeTab === 'email-bookmarks' && <EmailBookmarkSettingsForm />}
     </div>
   );
 }
