@@ -328,9 +328,10 @@ const createAchievementEvent = (appid, metadata, achievement, userId) => {
  * Collect Steam playtime data using daily accumulator model
  * @param {string} userId - User ID
  * @param {string} steamId - Steam ID (64-bit)
+ * @param {string} connectedAccountId - Connected account ID
  * @returns {Promise<{items: object[], nextCursor: null}>}
  */
-const collectPlaytime = async (userId, steamId) => {
+const collectPlaytime = async (userId, steamId, connectedAccountId) => {
   if (!apiKey || !steamId) {
     console.warn('Steam collector missing STEAM_API_KEY or Steam ID');
     return { items: [], nextCursor: null };
@@ -344,7 +345,7 @@ const collectPlaytime = async (userId, steamId) => {
   }
   
   const cursorSource = 'steam:playtime_2weeks';
-  const { id: cursorId, baselines } = await getPlaytimeBaselines(cursorSource, null);
+  const { id: cursorId, baselines } = await getPlaytimeBaselines(cursorSource, connectedAccountId);
   
   const todayKey = getTodayKey();
   const items = [];
@@ -402,9 +403,10 @@ const collectPlaytime = async (userId, steamId) => {
  * Collect Steam achievements for recently played games
  * @param {string} userId - User ID
  * @param {string} steamId - Steam ID (64-bit)
+ * @param {string} connectedAccountId - Connected account ID
  * @returns {Promise<{items: object[], nextCursor: null}>}
  */
-const collectAchievements = async (userId, steamId) => {
+const collectAchievements = async (userId, steamId, connectedAccountId) => {
   if (!apiKey || !steamId) {
     return { items: [], nextCursor: null };
   }
@@ -416,7 +418,7 @@ const collectAchievements = async (userId, steamId) => {
   }
   
   const cursorSource = 'steam:achievements';
-  const { id: cursorId, lastChecked } = await getAchievementCursor(cursorSource, null);
+  const { id: cursorId, lastChecked } = await getAchievementCursor(cursorSource, connectedAccountId);
   
   const items = [];
   const updatedLastChecked = { 
@@ -486,11 +488,26 @@ const collect = async () => {
   for (const { userId, steamId } of steamAccounts) {
     console.log(`Steam collector: fetching data for user ${userId} (Steam ID: ${steamId})...`);
     
+    // Get the connected account to pass its ID to the collectors
+    const connectedAccount = await prisma.connectedAccount.findFirst({
+      where: {
+        userId,
+        provider: 'steam',
+        providerAccountId: steamId,
+        status: 'active',
+      },
+    });
+    
+    if (!connectedAccount) {
+      console.warn(`  - Could not find connected account for user ${userId}, skipping`);
+      continue;
+    }
+    
     console.log('  - Fetching playtime data...');
-    const playtimeResult = await collectPlaytime(userId, steamId);
+    const playtimeResult = await collectPlaytime(userId, steamId, connectedAccount.id);
     
     console.log('  - Checking for new achievements...');
-    const achievementResult = await collectAchievements(userId, steamId);
+    const achievementResult = await collectAchievements(userId, steamId, connectedAccount.id);
     
     const items = [...playtimeResult.items, ...achievementResult.items];
     allItems.push(...items);
