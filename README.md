@@ -21,7 +21,7 @@ Lightweight personal journal, timeline ingestors, and daily digest renderer. Sto
    - Google OAuth credentials (Drive access) or service account with Drive API access
    - GitHub OAuth app (for GitHub activity collection)
    - Spotify OAuth app (for recently played tracks)
-   - Steam Web API key (for game playtime and achievements)
+   - Steam Web API key (for game playtime and achievements) - Users authenticate via Steam OpenID
    - Trello API key and token (for board activity collection)
 
 ## Quick Start — Development
@@ -75,9 +75,11 @@ GITHUB_CLIENT_SECRET=...
 SPOTIFY_CLIENT_ID=...
 SPOTIFY_CLIENT_SECRET=...
 
-# Steam Web API (for game playtime and achievements)
+# Steam Web API & OpenID (for game playtime and achievements)
 STEAM_API_KEY=...
-STEAM_ID=...  # Your 64-bit Steam ID
+STEAM_ID=...  # Optional: Your 64-bit Steam ID for development/testing fallback
+STEAM_RETURN_URL=http://localhost:3000/api/openid/steam/callback  # Steam OpenID callback URL
+STEAM_REALM=http://localhost:3000  # Steam OpenID realm (your domain)
 
 # Trello API (for board activity collection)
 TRELLO_API_KEY=...
@@ -324,6 +326,38 @@ node scripts/send-digest-email.js
    3. Connect Spotify via the Settings UI in the web app.
    4. The collector will automatically fetch your recently played tracks.
 
+### Steam
+   1. Get your Steam Web API Key:
+      - Go to https://steamcommunity.com/dev/apikey
+      - Fill out the form with your domain (use `localhost` for development)
+      - Copy the API key
+   2. Add to your `.env`:
+      ```
+      STEAM_API_KEY=your_api_key
+      STEAM_RETURN_URL=http://localhost:4001/api/openid/steam/callback
+      STEAM_REALM=http://localhost:4001
+      ```
+      For production, adjust URLs to match your domain.
+   3. Users authenticate via Steam OpenID:
+      - Click "Sign in with Steam" button in the Settings UI
+      - Users will be redirected to Steam to authenticate
+      - After authentication, their Steam ID is automatically captured
+      - No need to manually configure Steam IDs per user
+   4. The collector will automatically fetch:
+      - Recently played games with playtime tracking (daily accumulator model)
+      - Unlocked achievements with timestamps
+   5. **Development/Testing**: You can optionally set `STEAM_ID` in `.env` as a fallback for testing without authentication.
+
+   **How it works:**
+   - Steam uses OpenID 2.0 for authentication (not OAuth2)
+   - After authentication, the Steam ID is extracted from the OpenID claimed_id
+   - The collector tracks playtime using a "daily accumulator" model:
+     - Stores baseline `playtime_2weeks` values in the Cursor table
+     - Each run calculates the delta and adds it to today's event
+     - Creates per-day-per-game events to track playtime
+   - Game metadata (names, icons) is cached in Redis for 30 days
+   - Achievement events include unlock timestamps for timeline display
+
 ### Trello
    1. Get your Trello API Key:
       - Go to https://trello.com/power-ups/admin
@@ -374,6 +408,7 @@ node scripts/send-digest-email.js
 
 - **GitHub**: Commits, PRs, issues (requires OAuth connection)
 - **Spotify**: Recently played tracks (requires OAuth connection)
+- **Steam**: Game playtime and achievements (requires OpenID connection + API key)
 - **Trello**: Card movements and creations in tracked boards/lists (requires API key/token + per-user settings)
 - **Email Bookmarks**: Links extracted from IMAP mailbox (requires per-account IMAP settings)
 - **Google Timeline**: Location timeline from Drive JSON export (requires OAuth connection + Drive folder selection)

@@ -847,6 +847,116 @@ app.get('/api/oauth/google/callback', async (request, reply) => {
   }
 });
 
+// Steam OpenID Authentication
+app.get('/api/openid/steam/start', async (request, reply) => {
+  const returnTo = process.env.STEAM_RETURN_URL || `http://localhost:${process.env.PORT || 3000}/api/openid/steam/callback`;
+  const realm = process.env.STEAM_REALM || `http://localhost:${process.env.PORT || 3000}`;
+  
+  const params = new URLSearchParams({
+    'openid.ns': 'http://specs.openid.net/auth/2.0',
+    'openid.mode': 'checkid_setup',
+    'openid.return_to': returnTo,
+    'openid.realm': realm,
+    'openid.identity': 'http://specs.openid.net/auth/2.0/identifier_select',
+    'openid.claimed_id': 'http://specs.openid.net/auth/2.0/identifier_select',
+  });
+
+  const authUrl = `https://steamcommunity.com/openid/login?${params.toString()}`;
+  return reply.redirect(authUrl);
+});
+
+app.get('/api/openid/steam/callback', async (request, reply) => {
+  const { query } = request;
+  
+  // Verify the OpenID response
+  if (query['openid.mode'] !== 'id_res') {
+    return reply.status(400).send({ error: 'Invalid OpenID response' });
+  }
+
+  // Validate the response by checking with Steam again
+  const verifyParams = new URLSearchParams(query);
+  verifyParams.set('openid.mode', 'check_authentication');
+
+  try {
+    const verifyRes = await fetch('https://steamcommunity.com/openid/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: verifyParams.toString(),
+    });
+
+    const verifyText = await verifyRes.text();
+    
+    if (!verifyText.includes('is_valid:true')) {
+      request.log.warn({ verifyText }, 'Steam OpenID validation failed');
+      return reply.status(400).send({ error: 'Invalid Steam OpenID response' });
+    }
+
+    // Extract Steam ID from claimed_id
+    // Format: https://steamcommunity.com/openid/id/<steamid64>
+    const claimedId = query['openid.claimed_id'];
+    const steamIdMatch = claimedId?.match(/\/openid\/id\/(\d+)$/);
+    
+    if (!steamIdMatch || !steamIdMatch[1]) {
+      return reply.status(400).send({ error: 'Could not extract Steam ID' });
+    }
+
+    const steamId = steamIdMatch[1];
+    
+    // Fetch Steam profile information (requires Steam Web API key)
+    let displayName = `Steam User ${steamId}`;
+    
+    if (process.env.STEAM_API_KEY) {
+      try {
+        const profileRes = await fetch(
+          `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${process.env.STEAM_API_KEY}&steamids=${steamId}`
+        );
+        
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          const player = profileData.response?.players?.[0];
+          if (player?.personaname) {
+            displayName = player.personaname;
+          }
+        }
+      } catch (err) {
+        request.log.warn(err, 'Failed to fetch Steam profile');
+      }
+    }
+
+    // Find or create user and connected account
+    const user = await findOrCreateUserFromConnectedAccount({
+      email: null, // Steam doesn't provide email via OpenID
+      displayName,
+    });
+
+    const connected = await upsertConnectedAccount(
+      user.id,
+      'steam',
+      steamId,
+      displayName,
+      null // No scopes for OpenID
+    );
+
+    request.log.info({ userId: user.id, steamId, displayName }, 'Steam OpenID authentication successful');
+
+    // Set session cookie
+    const signed = signSession(user.id);
+    reply.setCookie('journal_auth', signed, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
+
+    return reply.redirect('/');
+  } catch (err) {
+    request.log.error(err, 'Steam OpenID callback failed');
+    return reply.status(500).send({ error: err?.message ?? String(err) });
+  }
+});
+
 app.get('/api/digest', async (request, reply) => {
   const user = await getSessionUser(request);
   if (!user) {
