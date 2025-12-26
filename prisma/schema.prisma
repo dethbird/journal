@@ -152,6 +152,7 @@ model ConnectedAccount {
   cursors            Cursor[]
   emailBookmarkSettings EmailBookmarkSettings?
   googleTimelineSettings GoogleTimelineSettings?
+  googleDriveSources GoogleDriveSource[]
 
   @@unique([userId, provider, providerAccountId])
   @@index([userId, provider])
@@ -209,6 +210,21 @@ model GoogleTimelineSettings {
   updatedAt          DateTime @updatedAt
 
   connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+}
+
+model GoogleDriveSource {
+  id                 String   @id @default(cuid())
+  connectedAccountId String
+  driveFolderId      String?
+  driveFileName      String   @default("Timeline.json")
+  enabled            Boolean  @default(true)
+  lastSyncedAt       DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  @@index([connectedAccountId])
 }
 
 model OAuthToken {
