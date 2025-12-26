@@ -43,6 +43,30 @@ const refreshAccessToken = async (connectedAccount, refreshToken) => {
   return res.json();
 };
 
+const findMostRecentFile = async (folderId, fileName, accessToken) => {
+  const escapedName = fileName.replace(/'/g, "\\'");
+  const query = `name='${escapedName}' and '${folderId}' in parents and trashed=false`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&orderBy=modifiedTime desc&pageSize=1&fields=files(id,name,modifiedTime)`;
+  
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Drive API search error (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  const files = data.files || [];
+  
+  if (files.length === 0) {
+    throw new Error(`No file named '${fileName}' found in folder ${folderId}`);
+  }
+
+  return files[0]; // Most recent file due to orderBy
+};
+
 const fetchDriveFile = async (fileId, accessToken) => {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   const controller = new AbortController();
@@ -74,28 +98,34 @@ const main = async () => {
     const userIdArg = process.argv[2];
     
     const where = userIdArg 
-      ? { provider: 'google', userId: userIdArg, googleTimelineSettings: { driveFileId: { not: null } } }
-      : { provider: 'google', googleTimelineSettings: { driveFileId: { not: null } } };
+      ? { provider: 'google', userId: userIdArg, googleDriveSources: { some: { enabled: true, driveFolderId: { not: null } } } }
+      : { provider: 'google', googleDriveSources: { some: { enabled: true, driveFolderId: { not: null } } } };
     
     const account = await prisma.connectedAccount.findFirst({
       where,
       include: {
         user: true,
         oauthTokens: true,
-        googleTimelineSettings: true,
+        googleDriveSources: true,
       },
     });
 
     if (!account) {
-      console.error('No Google account with timeline settings found');
+      console.error('No Google account with drive sources found');
       process.exit(1);
     }
 
-    const settings = account.googleTimelineSettings;
+    const driveSource = account.googleDriveSources.find(s => s.enabled && s.driveFolderId) || account.googleDriveSources[0];
+    if (!driveSource) {
+      console.error('No valid Google Drive source found');
+      process.exit(1);
+    }
+
     const user = account.user;
     
     console.log(`\n📊 Fetching Timeline.json for ${user.displayName || user.email}`);
-    console.log(`   File ID: ${settings.driveFileId}\n`);
+    console.log(`   Folder ID: ${driveSource.driveFolderId}`);
+    console.log(`   File name: ${driveSource.driveFileName}\n`);
 
     // Get access token
     const tokenRecord = latestToken(account.oauthTokens);
@@ -111,7 +141,9 @@ const main = async () => {
 
     // Fetch Timeline.json
     console.log('⬇️  Downloading Timeline.json from Google Drive...');
-    const data = await fetchDriveFile(settings.driveFileId, accessToken);
+    const fileInfo = await findMostRecentFile(driveSource.driveFolderId, driveSource.driveFileName, accessToken);
+    console.log(`   Found: ${fileInfo.name} (${fileInfo.id}), modified: ${fileInfo.modifiedTime}`);
+    const data = await fetchDriveFile(fileInfo.id, accessToken);
 
     const segments = data.semanticSegments || [];
     
