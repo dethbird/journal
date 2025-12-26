@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CONNECT_PROVIDERS } from '../constants';
+import { FINANCE_INSTITUTIONS, getDefaultFilename } from '../financeConfigs';
 import githubIcon from '../assets/github.ico';
 import spotifyIcon from '../assets/spotify.ico';
 import steamIcon from '../assets/steam.ico';
@@ -916,6 +917,405 @@ function UserGeneralSettings() {
   );
 }
 
+function FinanceSourcesForm({ connected, googleClientId }) {
+  const [state, setState] = useState({
+    loading: true,
+    sources: [],
+    editingSourceId: null,
+    editForm: {
+      driveFolderId: null,
+      folderName: null,
+      driveFileName: 'activity.csv',
+      institutionId: 'generic_csv',
+      institutionName: '',
+      enabled: true,
+    },
+    picking: false,
+    saving: false,
+    message: null,
+    error: null,
+  });
+
+  useEffect(() => {
+    const load = async () => {
+      if (!connected) {
+        setState((prev) => ({ ...prev, loading: false, error: 'Connect Google to configure finance sources.' }));
+        return;
+      }
+      // TODO: Fetch existing finance sources from API
+      // For now, just mark as loaded
+      setState((prev) => ({ ...prev, loading: false, sources: [] }));
+    };
+    load();
+  }, [connected]);
+
+  const openPicker = async () => {
+    if (!googleClientId) {
+      setState((prev) => ({ ...prev, error: 'Google client ID not configured' }));
+      return;
+    }
+
+    setState((prev) => ({ ...prev, picking: true, error: null }));
+
+    try {
+      // Get access token from server
+      const tokenRes = await fetch('/api/google/access-token', { credentials: 'include' });
+      if (!tokenRes.ok) {
+        const body = await tokenRes.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to get access token');
+      }
+      const { accessToken } = await tokenRes.json();
+
+      // Load Google Picker API
+      await new Promise((resolve, reject) => {
+        if (window.google?.picker) {
+          resolve();
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://apis.google.com/js/api.js';
+        script.onload = () => {
+          window.gapi.load('picker', { callback: resolve, onerror: reject });
+        };
+        script.onerror = reject;
+        document.body.appendChild(script);
+      });
+
+      // Create and show picker for folder selection
+      const view = new window.google.picker.DocsView()
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(true)
+        .setMimeTypes('application/vnd.google-apps.folder');
+
+      const picker = new window.google.picker.PickerBuilder()
+        .setAppId(googleClientId.split('-')[0])
+        .setOAuthToken(accessToken)
+        .addView(view)
+        .setCallback((data) => {
+          if (data.action === window.google.picker.Action.PICKED) {
+            const doc = data.docs[0];
+            setState((prev) => ({
+              ...prev,
+              editForm: {
+                ...prev.editForm,
+                driveFolderId: doc.id,
+                folderName: doc.name,
+              },
+              picking: false,
+            }));
+          } else if (data.action === window.google.picker.Action.CANCEL) {
+            setState((prev) => ({ ...prev, picking: false }));
+          }
+        })
+        .build();
+
+      picker.setVisible(true);
+    } catch (err) {
+      setState((prev) => ({ ...prev, picking: false, error: err.message }));
+    }
+  };
+
+  const handleInstitutionChange = (institutionId) => {
+    const defaultFilename = getDefaultFilename(institutionId);
+    const institution = FINANCE_INSTITUTIONS.find((i) => i.id === institutionId);
+    setState((prev) => ({
+      ...prev,
+      editForm: {
+        ...prev.editForm,
+        institutionId,
+        institutionName: institution?.name || '',
+        driveFileName: defaultFilename,
+      },
+    }));
+  };
+
+  const handleAddNew = () => {
+    setState((prev) => ({
+      ...prev,
+      editingSourceId: 'new',
+      editForm: {
+        driveFolderId: null,
+        folderName: null,
+        driveFileName: 'activity.csv',
+        institutionId: 'generic_csv',
+        institutionName: 'Generic CSV',
+        enabled: true,
+      },
+    }));
+  };
+
+  const handleEdit = (source) => {
+    setState((prev) => ({
+      ...prev,
+      editingSourceId: source.id,
+      editForm: {
+        driveFolderId: source.driveFolderId,
+        folderName: source.folderName || null,
+        driveFileName: source.driveFileName,
+        institutionId: source.institutionId,
+        institutionName: source.institutionName,
+        enabled: source.enabled,
+      },
+    }));
+  };
+
+  const handleCancelEdit = () => {
+    setState((prev) => ({
+      ...prev,
+      editingSourceId: null,
+      editForm: {
+        driveFolderId: null,
+        folderName: null,
+        driveFileName: 'activity.csv',
+        institutionId: 'generic_csv',
+        institutionName: '',
+        enabled: true,
+      },
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!state.editForm.driveFolderId) {
+      setState((prev) => ({ ...prev, error: 'Please select a folder first' }));
+      return;
+    }
+
+    setState((prev) => ({ ...prev, saving: true, message: null, error: null }));
+    try {
+      // TODO: Implement API call to save finance source
+      // const res = await fetch('/api/finance-sources', { method: 'POST', ... });
+      
+      // For now, just simulate success
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      setState((prev) => ({
+        ...prev,
+        saving: false,
+        message: 'Saved (API not yet implemented)',
+        editingSourceId: null,
+      }));
+      setTimeout(() => setState((prev) => ({ ...prev, message: null })), 2500);
+    } catch (err) {
+      setState((prev) => ({ ...prev, saving: false, error: err.message }));
+    }
+  };
+
+  const handleDelete = async (sourceId) => {
+    if (!confirm('Are you sure you want to delete this finance source?')) return;
+    
+    try {
+      // TODO: Implement API call to delete finance source
+      setState((prev) => ({
+        ...prev,
+        sources: prev.sources.filter((s) => s.id !== sourceId),
+        message: 'Deleted (API not yet implemented)',
+      }));
+      setTimeout(() => setState((prev) => ({ ...prev, message: null })), 2500);
+    } catch (err) {
+      setState((prev) => ({ ...prev, error: err.message }));
+    }
+  };
+
+  if (state.loading) return <p className="subtitle">Loading finance sources…</p>;
+
+  return (
+    <div>
+      <div className="box">
+        <div className="level">
+          <div className="level-left">
+            <div>
+              <p className="is-size-5 has-text-weight-semibold">Finance Data Sources</p>
+              <p className="help">Configure spreadsheet sources for financial data collection from Google Drive</p>
+            </div>
+          </div>
+          <div className="level-right">
+            <button
+              type="button"
+              className="button is-primary"
+              onClick={handleAddNew}
+              disabled={!connected || state.editingSourceId}
+            >
+              <span className="icon">
+                <i className="fa-solid fa-plus" />
+              </span>
+              <span>Add Source</span>
+            </button>
+          </div>
+        </div>
+
+        {!connected && <p className="help is-danger mt-2">Connect Google to add finance sources.</p>}
+        
+        {state.message && <p className="help is-success mt-2">{state.message}</p>}
+        {state.error && <p className="help is-danger mt-2">{state.error}</p>}
+      </div>
+
+      {/* Existing Sources List */}
+      {state.sources.length > 0 && (
+        <div className="mt-4">
+          {state.sources.map((source) => (
+            <div key={source.id} className="box">
+              <div className="level">
+                <div className="level-left">
+                  <div>
+                    <p className="has-text-weight-semibold">{source.institutionName}</p>
+                    <p className="is-size-7 has-text-grey">
+                      {source.driveFileName} • Folder: {source.folderName || source.driveFolderId}
+                    </p>
+                    <span className={`tag is-small ${source.enabled ? 'is-success' : 'is-warning'}`}>
+                      {source.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </div>
+                </div>
+                <div className="level-right">
+                  <div className="buttons">
+                    <button
+                      type="button"
+                      className="button is-small is-info"
+                      onClick={() => handleEdit(source)}
+                      disabled={state.editingSourceId}
+                    >
+                      <span className="icon is-small">
+                        <i className="fa-solid fa-edit" />
+                      </span>
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="button is-small is-danger"
+                      onClick={() => handleDelete(source.id)}
+                      disabled={state.editingSourceId}
+                    >
+                      <span className="icon is-small">
+                        <i className="fa-solid fa-trash" />
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Edit/Add Form */}
+      {state.editingSourceId && (
+        <div className="box mt-4">
+          <p className="is-size-5 has-text-weight-semibold mb-3">
+            {state.editingSourceId === 'new' ? 'Add Finance Source' : 'Edit Finance Source'}
+          </p>
+
+          <div className="field">
+            <label className="label">Institution / Parser Type</label>
+            <div className="control">
+              <div className="select is-fullwidth">
+                <select
+                  value={state.editForm.institutionId}
+                  onChange={(e) => handleInstitutionChange(e.target.value)}
+                  disabled={!connected}
+                >
+                  {FINANCE_INSTITUTIONS.map((inst) => (
+                    <option key={inst.id} value={inst.id}>
+                      {inst.name} ({inst.description})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="field mt-3">
+            <label className="label">Google Drive folder</label>
+            <div className="control">
+              <div className="is-flex is-align-items-center gap-half">
+                <span className={state.editForm.driveFolderId ? 'tag is-success is-medium' : 'tag is-warning is-medium'}>
+                  {state.editForm.driveFolderId ? (state.editForm.folderName || 'Folder selected') : 'No folder selected'}
+                </span>
+                <button
+                  type="button"
+                  className={`button is-info${state.picking ? ' is-loading' : ''}`}
+                  onClick={openPicker}
+                  disabled={!connected || state.picking}
+                >
+                  <span className="icon">
+                    <i className="fa-solid fa-folder-open" />
+                  </span>
+                  <span>Choose from Drive</span>
+                </button>
+              </div>
+              {state.editForm.driveFolderId && (
+                <p className="help has-text-grey">Folder ID: {state.editForm.driveFolderId}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="field mt-3">
+            <label className="label">Filename</label>
+            <div className="control">
+              <input
+                type="text"
+                className="input"
+                value={state.editForm.driveFileName}
+                onChange={(e) => setState((prev) => ({
+                  ...prev,
+                  editForm: { ...prev.editForm, driveFileName: e.target.value },
+                }))}
+                placeholder="activity.csv"
+                disabled={!connected}
+              />
+            </div>
+            <p className="help">The collector will search for the most recent file with this name in the selected folder.</p>
+          </div>
+
+          <div className="field mt-3">
+            <label className="checkbox">
+              <input
+                type="checkbox"
+                checked={state.editForm.enabled}
+                onChange={(e) => setState((prev) => ({
+                  ...prev,
+                  editForm: { ...prev.editForm, enabled: e.target.checked },
+                }))}
+                disabled={!connected}
+              />
+              <span className="ml-2">Enabled</span>
+            </label>
+          </div>
+
+          <div className="field is-grouped mt-4">
+            <div className="control">
+              <button
+                type="button"
+                className={`button is-primary${state.saving ? ' is-loading' : ''}`}
+                onClick={handleSave}
+                disabled={!connected || !state.editForm.driveFolderId}
+              >
+                Save
+              </button>
+            </div>
+            <div className="control">
+              <button
+                type="button"
+                className="button is-light"
+                onClick={handleCancelEdit}
+                disabled={state.saving}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {state.sources.length === 0 && !state.editingSourceId && (
+        <div className="box mt-4 has-text-centered has-text-grey">
+          <p className="is-size-6">No finance sources configured yet.</p>
+          <p className="is-size-7 mt-2">Click "Add Source" to get started.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Settings({ user, onDisconnect }) {
   const connectedAccounts = user?.connectedAccounts || [];
   const googleConnected = connectedAccounts.some((acc) => acc.provider === 'google');
@@ -979,6 +1379,12 @@ export default function Settings({ user, onDisconnect }) {
               <span>Email Bookmarks</span>
             </a>
           </li>
+          <li className={activeTab === 'finance' ? 'is-active' : ''}>
+            <a onClick={() => setActiveTab('finance')}>
+              <span className="icon is-small"><i className="fa-solid fa-money-bill" /></span>
+              <span>Finance</span>
+            </a>
+          </li>
         </ul>
       </div>
 
@@ -1023,6 +1429,7 @@ export default function Settings({ user, onDisconnect }) {
       {activeTab === 'trello' && <TrelloSettingsForm />}
       {activeTab === 'email-delivery' && <EmailDeliverySettingsForm />}
       {activeTab === 'email-bookmarks' && <EmailBookmarkSettingsForm />}
+      {activeTab === 'finance' && <FinanceSourcesForm connected={googleConnected} googleClientId={googleClientId} />}
     </div>
   );
 }
