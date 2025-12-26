@@ -187,6 +187,17 @@ const serializeGoogleTimelineSettings = (settings) => {
   };
 };
 
+const serializeGoogleDriveSource = (source) => {
+  if (!source) return null;
+  return {
+    id: source.id,
+    driveFolderId: source.driveFolderId || null,
+    driveFileName: source.driveFileName || 'Timeline.json',
+    enabled: source.enabled,
+    lastSyncedAt: source.lastSyncedAt,
+  };
+};
+
 const serializeEmailDelivery = (delivery) => {
   if (!delivery) return null;
   return {
@@ -1379,14 +1390,16 @@ app.get('/api/google-timeline/settings', async (request, reply) => {
 
   const account = await prisma.connectedAccount.findFirst({
     where: { userId: user.id, provider: 'google' },
-    include: { googleTimelineSettings: true },
+    include: { googleDriveSources: true },
   });
 
   if (!account) {
     return reply.status(400).send({ error: 'Google is not connected' });
   }
 
-  const settings = serializeGoogleTimelineSettings(account.googleTimelineSettings) || { driveFolderId: null, driveFileName: 'Timeline.json' };
+  // Return the first (primary) drive source for backward compatibility
+  const primarySource = account.googleDriveSources?.[0];
+  const settings = serializeGoogleTimelineSettings(primarySource) || { driveFolderId: null, driveFileName: 'Timeline.json' };
   return { settings };
 });
 
@@ -1401,18 +1414,31 @@ app.post('/api/google-timeline/settings', async (request, reply) => {
 
   const account = await prisma.connectedAccount.findFirst({
     where: { userId: user.id, provider: 'google' },
-    include: { googleTimelineSettings: true },
+    include: { googleDriveSources: true },
   });
 
   if (!account) {
     return reply.status(400).send({ error: 'Google is not connected' });
   }
 
-  const settings = await prisma.googleTimelineSettings.upsert({
-    where: { connectedAccountId: account.id },
-    update: { driveFolderId, driveFileName: driveFileName || 'Timeline.json' },
-    create: { connectedAccountId: account.id, driveFolderId, driveFileName: driveFileName || 'Timeline.json' },
-  });
+  // Update existing primary source or create new one
+  const primarySource = account.googleDriveSources?.[0];
+  let settings;
+  
+  if (primarySource) {
+    settings = await prisma.googleDriveSource.update({
+      where: { id: primarySource.id },
+      data: { driveFolderId, driveFileName: driveFileName || 'Timeline.json' },
+    });
+  } else {
+    settings = await prisma.googleDriveSource.create({
+      data: {
+        connectedAccountId: account.id,
+        driveFolderId,
+        driveFileName: driveFileName || 'Timeline.json',
+      },
+    });
+  }
 
   return { settings: serializeGoogleTimelineSettings(settings) };
 });
@@ -2040,7 +2066,7 @@ app.post('/api/disconnect', async (request, reply) => {
     // Remove related records to avoid foreign-key constraint errors
     await prisma.oAuthToken.deleteMany({ where: { connectedAccountId: existing.id } });
     await prisma.cursor.deleteMany({ where: { connectedAccountId: existing.id } });
-    await prisma.googleTimelineSettings.deleteMany({ where: { connectedAccountId: existing.id } });
+    await prisma.googleDriveSource.deleteMany({ where: { connectedAccountId: existing.id } });
     await prisma.emailBookmarkSettings.deleteMany({ where: { connectedAccountId: existing.id } });
 
     await prisma.connectedAccount.delete({ where: { id: existing.id } });
