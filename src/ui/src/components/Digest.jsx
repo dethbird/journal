@@ -198,6 +198,56 @@ const BookmarkSection = ({ section, onDeleteBookmark }) => {
   );
 };
 
+const FinanceSection = ({ source }) => {
+  if (!source) return null;
+
+  const formatAmount = (amount) => {
+    const sign = amount < 0 ? '-' : '';
+    const abs = Math.abs(amount);
+    return `${sign}$${abs.toFixed(2)}`;
+  };
+
+  return (
+    <div className="box">
+      <p className="title is-5">{source.name}</p>
+      
+      <div className="mb-3">
+        <p className="is-size-6">
+          {source.count} transaction{source.count === 1 ? '' : 's'}
+        </p>
+        <p className="is-size-7 has-text-grey">
+          Debits: ${source.debits.toFixed(2)}
+          {source.credits > 0 && ` · Credits: -$${source.credits.toFixed(2)}`}
+        </p>
+      </div>
+
+      {source.transactions?.length ? (
+        <div className="content">
+          <table className="table is-fullwidth is-size-7">
+            <tbody>
+              {source.transactions.map((tx, idx) => (
+                <tr key={`${tx.reference || idx}`}>
+                  <td className="has-text-grey" style={{ width: '80px', whiteSpace: 'nowrap' }}>
+                    {tx.date}
+                  </td>
+                  <td>{tx.description}</td>
+                  <td className="has-text-right has-text-weight-semibold" style={{ width: '100px', whiteSpace: 'nowrap' }}>
+                    <span className={tx.amount < 0 ? 'has-text-success' : ''}>
+                      {formatAmount(tx.amount)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="has-text-grey">No transactions</p>
+      )}
+    </div>
+  );
+};
+
 const MusicSection = ({ section, inCard = false }) => {
   if (!section) return null;
   const summary = section.summary ?? {};
@@ -808,7 +858,8 @@ export default function Digest({ offsetDays = 0, onWeather }) {
           const music = vm.sections?.find((s) => s.kind === 'music') ?? null;
           const gaming = vm.sections?.find((s) => s.kind === 'gaming') ?? null;
           const timeline = vm.sections?.find((s) => s.kind === 'timeline') ?? null;
-          const other = (vm.sections || []).filter((s) => !['github', 'trello', 'music', 'gaming', 'timeline'].includes(s.kind));
+          const finance = vm.sections?.find((s) => s.kind === 'finance') ?? null;
+          const other = (vm.sections || []).filter((s) => !['github', 'trello', 'music', 'gaming', 'timeline', 'finance'].includes(s.kind));
 
           let delayCounter = 0.1;
 
@@ -909,6 +960,19 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                   </div>
                 </div>
               </AnimatedSection>
+
+              {/* Finance Sources - one section per source */}
+              {finance?.sources?.length > 0 && (
+                <AnimatedSection delay={delayCounter + 0.3}>
+                  <div className="columns is-multiline">
+                    {finance.sources.map((source, idx) => (
+                      <div key={source.sourceId || idx} className="column is-12-mobile is-6-desktop">
+                        <FinanceSection source={source} />
+                      </div>
+                    ))}
+                  </div>
+                </AnimatedSection>
+              )}
             </>
           );
         })()

@@ -4,36 +4,34 @@ const source = 'finance';
 
 /**
  * Build finance digest section from transaction events
+ * Returns individual sections per source (institution account)
  */
 export const buildFinanceSection = (events) => {
   if (!events?.length) return null;
 
-  // Group transactions by institution
-  const byInstitution = new Map();
+  // Group transactions by sourceId (individual finance source/account)
+  const bySource = new Map();
   
-  let totalSpent = 0;
-  let totalCredits = 0;
-  let transactionCount = 0;
-
   for (const evt of events) {
     const payload = evt.payload || {};
+    const sourceId = payload.sourceId || 'unknown';
     const institutionName = payload.institutionName || 'Unknown';
     const nickname = payload.nickname || null;
-    const institutionKey = nickname ? `${institutionName} - ${nickname}` : institutionName;
     const amount = payload.amount || 0;
     
-    if (!byInstitution.has(institutionKey)) {
-      byInstitution.set(institutionKey, {
-        name: institutionKey,
+    if (!bySource.has(sourceId)) {
+      bySource.set(sourceId, {
+        sourceId,
+        name: nickname ? `${institutionName} - ${nickname}` : institutionName,
         transactions: [],
-        spent: 0,
-        credits: 0,
+        debits: 0,   // positive amounts (money spent)
+        credits: 0,  // negative amounts (payments/refunds)
         count: 0,
       });
     }
 
-    const institution = byInstitution.get(institutionKey);
-    institution.transactions.push({
+    const source = bySource.get(sourceId);
+    source.transactions.push({
       date: payload.date,
       description: payload.description,
       amount,
@@ -44,40 +42,30 @@ export const buildFinanceSection = (events) => {
 
     if (amount < 0) {
       // Negative amount = payment/credit
-      institution.credits += Math.abs(amount);
-      totalCredits += Math.abs(amount);
+      source.credits += Math.abs(amount);
     } else {
       // Positive amount = charge/debit
-      institution.spent += amount;
-      totalSpent += amount;
+      source.debits += amount;
     }
 
-    institution.count++;
-    transactionCount++;
+    source.count++;
   }
 
-  // Sort transactions within each institution by date (newest first)
-  for (const institution of byInstitution.values()) {
-    institution.transactions.sort((a, b) => {
+  // Sort transactions within each source by date (newest first)
+  for (const source of bySource.values()) {
+    source.transactions.sort((a, b) => {
       const dateA = new Date(a.occurredAt || a.date);
       const dateB = new Date(b.occurredAt || b.date);
       return dateB - dateA;
     });
   }
 
-  // Convert to array and sort by total spent (highest first)
-  const institutions = Array.from(byInstitution.values()).sort((a, b) => b.spent - a.spent);
+  // Convert to array - keep original order or sort by name
+  const sources = Array.from(bySource.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   return {
     kind: 'finance',
-    institutions,
-    summary: {
-      totalSpent,
-      totalCredits,
-      netSpent: totalSpent - totalCredits,
-      transactionCount,
-      institutionCount: institutions.length,
-    },
+    sources,  // Array of individual source objects
   };
 };
 
