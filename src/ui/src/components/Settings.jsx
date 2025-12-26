@@ -942,9 +942,16 @@ function FinanceSourcesForm({ connected, googleClientId }) {
         setState((prev) => ({ ...prev, loading: false, error: 'Connect Google to configure finance sources.' }));
         return;
       }
-      // TODO: Fetch existing finance sources from API
-      // For now, just mark as loaded
-      setState((prev) => ({ ...prev, loading: false, sources: [] }));
+      try {
+        const res = await fetch('/api/finance-sources', { credentials: 'include' });
+        if (!res.ok) {
+          throw new Error('Failed to load finance sources');
+        }
+        const data = await res.json();
+        setState((prev) => ({ ...prev, loading: false, sources: data.sources || [] }));
+      } catch (err) {
+        setState((prev) => ({ ...prev, loading: false, error: err.message }));
+      }
     };
     load();
   }, [connected]);
@@ -1039,6 +1046,7 @@ function FinanceSourcesForm({ connected, googleClientId }) {
         driveFileName: 'activity.csv',
         institutionId: 'generic_csv',
         institutionName: 'Generic CSV',
+        nickname: '',
         enabled: true,
       },
     }));
@@ -1054,6 +1062,7 @@ function FinanceSourcesForm({ connected, googleClientId }) {
         driveFileName: source.driveFileName,
         institutionId: source.institutionId,
         institutionName: source.institutionName,
+        nickname: source.nickname || '',
         enabled: source.enabled,
       },
     }));
@@ -1069,6 +1078,7 @@ function FinanceSourcesForm({ connected, googleClientId }) {
         driveFileName: 'activity.csv',
         institutionId: 'generic_csv',
         institutionName: '',
+        nickname: '',
         enabled: true,
       },
     }));
@@ -1082,18 +1092,52 @@ function FinanceSourcesForm({ connected, googleClientId }) {
 
     setState((prev) => ({ ...prev, saving: true, message: null, error: null }));
     try {
-      // TODO: Implement API call to save finance source
-      // const res = await fetch('/api/finance-sources', { method: 'POST', ... });
+      const institution = FINANCE_INSTITUTIONS.find((i) => i.id === state.editForm.institutionId);
+      const payload = {
+        id: state.editingSourceId,
+        driveFolderId: state.editForm.driveFolderId,
+        driveFileName: state.editForm.driveFileName,
+        institutionId: state.editForm.institutionId,
+        institutionName: institution?.name || state.editForm.institutionName,
+        nickname: state.editForm.nickname || null,
+        parserFormat: institution?.parserFormat || 'generic_csv',
+        enabled: state.editForm.enabled,
+      };
+
+      const res = await fetch('/api/finance-sources', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to save finance source');
+      }
+
+      const data = await res.json();
       
-      // For now, just simulate success
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      
-      setState((prev) => ({
-        ...prev,
-        saving: false,
-        message: 'Saved (API not yet implemented)',
-        editingSourceId: null,
-      }));
+      // Reload sources
+      const listRes = await fetch('/api/finance-sources', { credentials: 'include' });
+      if (listRes.ok) {
+        const listData = await listRes.json();
+        setState((prev) => ({
+          ...prev,
+          saving: false,
+          message: 'Saved',
+          editingSourceId: null,
+          sources: listData.sources || [],
+        }));
+      } else {
+        setState((prev) => ({
+          ...prev,
+          saving: false,
+          message: 'Saved',
+          editingSourceId: null,
+        }));
+      }
+
       setTimeout(() => setState((prev) => ({ ...prev, message: null })), 2500);
     } catch (err) {
       setState((prev) => ({ ...prev, saving: false, error: err.message }));
@@ -1104,11 +1148,20 @@ function FinanceSourcesForm({ connected, googleClientId }) {
     if (!confirm('Are you sure you want to delete this finance source?')) return;
     
     try {
-      // TODO: Implement API call to delete finance source
+      const res = await fetch(`/api/finance-sources/${sourceId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to delete finance source');
+      }
+
       setState((prev) => ({
         ...prev,
         sources: prev.sources.filter((s) => s.id !== sourceId),
-        message: 'Deleted (API not yet implemented)',
+        message: 'Deleted',
       }));
       setTimeout(() => setState((prev) => ({ ...prev, message: null })), 2500);
     } catch (err) {
@@ -1157,7 +1210,10 @@ function FinanceSourcesForm({ connected, googleClientId }) {
               <div className="level">
                 <div className="level-left">
                   <div>
-                    <p className="has-text-weight-semibold">{source.institutionName}</p>
+                    <p className="has-text-weight-semibold">
+                      {source.institutionName}
+                      {source.nickname && <span className="has-text-grey"> • {source.nickname}</span>}
+                    </p>
                     <p className="is-size-7 has-text-grey">
                       {source.driveFileName} • Folder: {source.folderName || source.driveFolderId}
                     </p>
@@ -1221,6 +1277,24 @@ function FinanceSourcesForm({ connected, googleClientId }) {
                 </select>
               </div>
             </div>
+          </div>
+
+          <div className="field mt-3">
+            <label className="label">Nickname (optional)</label>
+            <div className="control">
+              <input
+                type="text"
+                className="input"
+                value={state.editForm.nickname || ''}
+                onChange={(e) => setState((prev) => ({
+                  ...prev,
+                  editForm: { ...prev.editForm, nickname: e.target.value },
+                }))}
+                placeholder="e.g., Personal Card, Business Card, ...1234"
+                disabled={!connected}
+              />
+            </div>
+            <p className="help">A friendly name to differentiate multiple accounts from the same institution</p>
           </div>
 
           <div className="field mt-3">

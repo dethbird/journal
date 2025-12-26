@@ -1444,6 +1444,119 @@ app.post('/api/google-timeline/settings', async (request, reply) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Finance Sources API
+// ─────────────────────────────────────────────────────────────────────────────
+
+const serializeFinanceSource = (source) => {
+  if (!source) return null;
+  return {
+    id: source.id,
+    driveFolderId: source.driveFolderId || null,
+    driveFileName: source.driveFileName || 'activity.csv',
+    institutionId: source.institutionId,
+    institutionName: source.institutionName,
+    nickname: source.nickname,
+    parserFormat: source.parserFormat,
+    enabled: source.enabled,
+    lastSyncedAt: source.lastSyncedAt,
+    folderName: null, // Could be fetched from Drive API if needed
+  };
+};
+
+app.get('/api/finance-sources', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const account = await prisma.connectedAccount.findFirst({
+    where: { userId: user.id, provider: 'google' },
+    include: { googleDriveSources: { where: { sourceType: 'finance' } } },
+  });
+
+  if (!account) {
+    return { sources: [] };
+  }
+
+  const sources = account.googleDriveSources.map(serializeFinanceSource);
+  return { sources };
+});
+
+app.post('/api/finance-sources', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id, driveFolderId, driveFileName, institutionId, institutionName, parserFormat, enabled } = request.body || {};
+  
+  if (!driveFolderId) {
+    return reply.status(400).send({ error: 'driveFolderId is required' });
+  }
+  if (!institutionId || !institutionName || !parserFormat) {
+    return reply.status(400).send({ error: 'institutionId, institutionName, and parserFormat are required' });
+  }
+
+  const account = await prisma.connectedAccount.findFirst({
+    where: { userId: user.id, provider: 'google' },
+  });
+
+  if (!account) {
+    return reply.status(400).send({ error: 'Google is not connected' });
+  }
+
+  let source;
+  if (id && id !== 'new') {
+    // Update existing source
+    source = await prisma.googleDriveSource.update({
+      where: { id },
+      data: {
+        driveFolderId,
+        driveFileName: driveFileName || 'activity.csv',
+        institutionId,
+        institutionName,
+        nickname: request.body.nickname || null,
+        parserFormat,
+        enabled: enabled !== undefined ? enabled : true,
+      },
+    });
+  } else {
+    // Create new source
+    source = await prisma.googleDriveSource.create({
+      data: {
+        connectedAccountId: account.id,
+        sourceType: 'finance',
+        driveFolderId,
+        driveFileName: driveFileName || 'activity.csv',
+        institutionId,
+        institutionName,
+        nickname: request.body.nickname || null,
+        parserFormat,
+        enabled: enabled !== undefined ? enabled : true,
+      },
+    });
+  }
+
+  return { source: serializeFinanceSource(source) };
+});
+
+app.delete('/api/finance-sources/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+
+  // Verify the source belongs to the user's account and is a finance source
+  const source = await prisma.googleDriveSource.findUnique({
+    where: { id },
+    include: { connectedAccount: true },
+  });
+
+  if (!source || source.connectedAccount.userId !== user.id || source.sourceType !== 'finance') {
+    return reply.status(404).send({ error: 'Finance source not found' });
+  }
+
+  await prisma.googleDriveSource.delete({ where: { id } });
+  return { ok: true };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Trello Settings API
 // ─────────────────────────────────────────────────────────────────────────────
 
