@@ -5,6 +5,7 @@ import buildSpotifySection from './sections/spotify.js';
 import buildSteamSection from './sections/steam.js';
 import buildTimelineSection from './sections/timeline.js';
 import buildTrelloSection from './sections/trello.js';
+import buildFinanceSection from './sections/finance.js';
 
 const DEFAULT_RANGE_HOURS = Number(process.env.DIGEST_RANGE_HOURS ?? 24);
 
@@ -56,6 +57,10 @@ export const buildDigestViewModel = async ({ since = null, until = null, userId 
   }
   if (grouped.has('trello')) {
     const section = buildTrelloSection(grouped.get('trello'));
+    if (section) sections.push(section);
+  }
+  if (grouped.has('finance')) {
+    const section = buildFinanceSection(grouped.get('finance'));
     if (section) sections.push(section);
   }
 

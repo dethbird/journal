@@ -92,6 +92,56 @@ const renderGaming = (section) => {
   return lines;
 };
 
+const renderFinance = (section) => {
+  const lines = [formatLine('Finance')];
+  const summary = section.summary ?? {};
+  
+  // Overall summary
+  const summaryParts = [];
+  if (summary.transactionCount) summaryParts.push(`${summary.transactionCount} transactions`);
+  if (summary.institutionCount) summaryParts.push(`${summary.institutionCount} accounts`);
+  if (summaryParts.length) {
+    lines.push(`• ${summaryParts.join(' · ')}`);
+  }
+  
+  if (summary.totalSpent !== undefined) {
+    lines.push(`• Spent: $${summary.totalSpent.toFixed(2)}`);
+  }
+  if (summary.totalCredits !== undefined && summary.totalCredits > 0) {
+    lines.push(`• Credits/Payments: -$${summary.totalCredits.toFixed(2)}`);
+  }
+  if (summary.netSpent !== undefined) {
+    lines.push(`• Net: $${summary.netSpent.toFixed(2)}`);
+  }
+
+  // By institution
+  if ((section.institutions ?? []).length) {
+    lines.push('');
+    for (const inst of section.institutions) {
+      lines.push(`${inst.name}:`);
+      lines.push(`  ${inst.count} transactions · Spent: $${inst.spent.toFixed(2)}`);
+      if (inst.credits > 0) {
+        lines.push(`  Credits/Payments: -$${inst.credits.toFixed(2)}`);
+      }
+      
+      // Show recent transactions
+      const recentTxs = inst.transactions.slice(0, 5);
+      for (const tx of recentTxs) {
+        const sign = tx.amount < 0 ? '-' : '';
+        const absAmount = Math.abs(tx.amount);
+        lines.push(`  • ${tx.date}: ${tx.description} ${sign}$${absAmount.toFixed(2)}`);
+      }
+      
+      if (inst.transactions.length > 5) {
+        lines.push(`  ... and ${inst.transactions.length - 5} more`);
+      }
+      lines.push('');
+    }
+  }
+
+  return lines;
+};
+
 export const renderTextDigest = (vm) => {
   const lines = [];
   lines.push('Daily Digest');
@@ -112,6 +162,8 @@ export const renderTextDigest = (vm) => {
       lines.push(...renderMusic(section));
     } else if (section.kind === 'gaming') {
       lines.push(...renderGaming(section));
+    } else if (section.kind === 'finance') {
+      lines.push(...renderFinance(section));
     }
   }
 
