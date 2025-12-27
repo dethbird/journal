@@ -1,7 +1,11 @@
 import crypto from 'node:crypto';
 import { parse } from 'csv-parse/sync';
+import { createRequire } from 'node:module';
 import { registerCollector } from '../registry.js';
 import prisma from '../../lib/prismaClient.js';
+
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 const source = 'finance';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -119,7 +123,7 @@ const findFileInFolder = async (accessToken, folderId, fileName) => {
 /**
  * Download file content from Google Drive
  */
-const downloadFile = async (accessToken, fileId) => {
+const downloadFile = async (accessToken, fileId, asBinary = false) => {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   
   const controller = new AbortController();
@@ -136,6 +140,11 @@ const downloadFile = async (accessToken, fileId) => {
       throw new Error(`Google Drive file download failed (${res.status}): ${body}`);
     }
 
+    if (asBinary) {
+      const arrayBuffer = await res.arrayBuffer();
+      return Buffer.from(arrayBuffer);
+    }
+    
     return await res.text();
   } finally {
     clearTimeout(timeout);
@@ -229,6 +238,104 @@ const parseChaseCheckingCSV = (csvContent) => {
 };
 
 /**
+ * Parse Chime PDF statement format
+ * Extracts transactions section between "Transactions" and "Yearly Summary"
+ * Parses rows with pattern: DATE DESCRIPTION TYPE AMOUNT NET_AMOUNT DATE
+ */
+const parseChimePDF = async (pdfBuffer) => {
+  try {
+    const data = await pdfParse(pdfBuffer);
+    const text = data.text;
+
+    // Find transactions section
+    const startMarker = 'Transactions';
+    const endMarker = 'Yearly Summary';
+    const startIdx = text.indexOf(startMarker);
+    const endIdx = text.indexOf(endMarker);
+
+    if (startIdx === -1 || endIdx === -1) {
+      console.log('[finance] Could not find transaction section in PDF');
+      return [];
+    }
+
+    // Extract and normalize text
+    let txSection = text.substring(startIdx + startMarker.length, endIdx);
+    // Normalize whitespace: collapse multiple spaces/newlines into single space
+    txSection = txSection.replace(/\s+/g, ' ').trim();
+
+    // Split into rows by detecting leading date pattern MM/DD/YYYY
+    const datePattern = /(\d{2}\/\d{2}\/\d{4})/g;
+    const transactions = [];
+    let match;
+    const datePositions = [];
+
+    // Find all date positions
+    while ((match = datePattern.exec(txSection)) !== null) {
+      datePositions.push({ index: match.index, date: match[1] });
+    }
+
+    // Parse each transaction (between consecutive dates)
+    for (let i = 0; i < datePositions.length; i++) {
+      const start = datePositions[i].index;
+      const end = i < datePositions.length - 1 ? datePositions[i + 1].index : txSection.length;
+      const rowText = txSection.substring(start, end).trim();
+
+      // Extract dates (first and last)
+      const dates = rowText.match(/\d{2}\/\d{2}\/\d{4}/g);
+      if (!dates || dates.length < 1) continue;
+      
+      const transactionDate = dates[0];
+      const settlementDate = dates.length > 1 ? dates[dates.length - 1] : dates[0];
+
+      // Extract amounts (look for $XXX.XX patterns, can be negative)
+      const amountPattern = /-?\$[\d,]+\.\d{2}/g;
+      const amounts = rowText.match(amountPattern);
+      if (!amounts || amounts.length < 1) {
+        continue;
+      }
+
+      const amount = parseFloat(amounts[0].replace(/[$,]/g, '')) || 0;
+      const netAmount = amounts.length > 1 ? parseFloat(amounts[1].replace(/[$,]/g, '')) : amount;
+
+      // Extract description and type
+      let remainder = rowText;
+      dates.forEach(d => { remainder = remainder.replace(d, ''); });
+      amounts.forEach(a => { remainder = remainder.replace(a, ''); });
+      remainder = remainder.trim();
+
+      // Type patterns to look for
+      const typePatterns = ['Direct Debit', 'Direct Credit', 'Debit', 'Credit', 'ATM Withdrawal', 'Purchase'];
+      let type = '';
+      let description = remainder;
+
+      for (const typeCandidate of typePatterns) {
+        const lastIdx = remainder.lastIndexOf(typeCandidate);
+        if (lastIdx !== -1) {
+          type = typeCandidate;
+          description = remainder.substring(0, lastIdx).trim();
+          break;
+        }
+      }
+
+      transactions.push({
+        date: transactionDate,
+        settlementDate,
+        description: description || remainder,
+        type,
+        amount,
+        netAmount,
+        reference: `${transactionDate}-${amount.toFixed(2)}-${description.substring(0, 20)}`,
+      });
+    }
+
+    return transactions;
+  } catch (error) {
+    console.error('[finance] Error parsing Chime PDF:', error);
+    return [];
+  }
+};
+
+/**
  * Generic CSV parser - will be used for other institution types
  */
 const parseGenericCSV = (csvContent) => {
@@ -237,20 +344,23 @@ const parseGenericCSV = (csvContent) => {
 };
 
 /**
- * Parse CSV based on parser format
+ * Parse file content based on parser format
+ * Handles both CSV and PDF formats
  */
-const parseCSV = (csvContent, parserFormat) => {
+const parseFile = async (content, parserFormat) => {
   switch (parserFormat) {
     case 'amex_csv':
-      return parseAmexCSV(csvContent);
+      return parseAmexCSV(content);
     case 'chase_csv':
-      return parseChaseCSV(csvContent);
+      return parseChaseCSV(content);
     case 'chase_checking_csv':
-      return parseChaseCheckingCSV(csvContent);
+      return parseChaseCheckingCSV(content);
+    case 'chime_pdf':
+      return await parseChimePDF(content);
     case 'chime_csv':
     case 'generic_csv':
     default:
-      return parseGenericCSV(csvContent);
+      return parseGenericCSV(content);
   }
 };
 
@@ -358,9 +468,10 @@ const collectForAccount = async (account, cursor) => {
 
       console.log(`[finance] Found file: ${file.name} (modified: ${file.modifiedTime})`);
 
-      // Download and parse the CSV
-      const csvContent = await downloadFile(accessToken, file.id);
-      const transactions = parseCSV(csvContent, financeSource.parserFormat);
+      // Download and parse the file (CSV or PDF)
+      const isPDF = financeSource.parserFormat.includes('_pdf');
+      const fileContent = await downloadFile(accessToken, file.id, isPDF);
+      const transactions = await parseFile(fileContent, financeSource.parserFormat);
 
       console.log(`[finance] Parsed ${transactions.length} transactions`);
 

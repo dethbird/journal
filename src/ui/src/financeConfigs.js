@@ -20,7 +20,14 @@ export const FINANCE_INSTITUTIONS = [
   },
   {
     id: 'chime',
-    name: 'Chime',
+    name: 'Chime (PDF Statement)',
+    parserFormat: 'chime_pdf',
+    description: 'Chime PDF statement export',
+    defaultFilename: 'statement.pdf',
+  },
+  {
+    id: 'chime_csv',
+    name: 'Chime (CSV)',
     parserFormat: 'chime_csv',
     description: 'Chime CSV export format',
     defaultFilename: 'activity.csv',
