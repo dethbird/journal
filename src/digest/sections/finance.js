@@ -22,8 +22,8 @@ export const buildFinanceSection = (events) => {
     
     // Different institutions use different sign conventions:
     // - Amex: positive = charge (debit), negative = payment (credit)
-    // - Chase: negative = charge (debit), positive = payment (credit)
-    const isChaseFormat = parserFormat.startsWith('chase');
+    // - Chase/Chime: negative = charge (debit), positive = payment (credit)
+    const isChaseFormat = parserFormat.startsWith('chase') || parserFormat.startsWith('chime');
     
     if (!bySource.has(sourceId)) {
       bySource.set(sourceId, {
