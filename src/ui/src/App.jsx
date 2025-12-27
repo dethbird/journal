@@ -8,6 +8,9 @@ import Journal from './components/Journal';
 import Settings from './components/Settings';
 import { CONNECT_PROVIDERS } from './constants';
 import logoFull from './assets/logo/logo-full.png';
+import spotifyIcon from './assets/spotify.ico';
+import githubIcon from './assets/github.ico';
+import googleIcon from './assets/google.ico';
 
 const CollectorControls = ({ onStatusChange }) => {
   const [status, setStatus] = useState({ loading: true, canStart: false, currentRunning: null, recentRuns: [] });
@@ -130,23 +133,25 @@ const formatDateISO = (date) => {
 };
 
 const LoginView = () => (
-  <div className="box">
-    <p className="subtitle is-5 mb-3">You are not logged in.</p>
-    <a className="button is-success" href="/api/oauth/spotify/start">
-      Login with Spotify
-    </a>
-    <a className="button is-dark ml-2" href="/api/oauth/github/start">
-      <span className="icon">
-        <i className="fa-brands fa-github" />
-      </span>
-      <span>Login with GitHub</span>
-    </a>
-    <a className="button is-primary ml-2" href="/api/oauth/google/start">
-      <span className="icon">
-        <i className="fa-brands fa-google" />
-      </span>
-      <span>Login with Google</span>
-    </a>
+  <div style={{ textAlign: 'center' }}>
+    <img src={logoFull} alt="Evidence Journal" style={{ height: '48px', marginBottom: '1rem' }} />
+    <div className="box">
+      <p className="subtitle is-5 mb-4">Please login.</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
+        <a className="button is-light" href="/api/oauth/spotify/start" style={{ minWidth: '250px', justifyContent: 'flex-start', gap: '1rem' }}>
+          <img src={spotifyIcon} alt="Spotify" className="section-icon" />
+          <span>Login with Spotify</span>
+        </a>
+        <a className="button is-light" href="/api/oauth/github/start" style={{ minWidth: '250px', justifyContent: 'flex-start', gap: '1rem' }}>
+          <img src={githubIcon} alt="GitHub" className="section-icon" />
+          <span>Login with GitHub</span>
+        </a>
+        <a className="button is-light" href="/api/oauth/google/start" style={{ minWidth: '250px', justifyContent: 'flex-start', gap: '1rem' }}>
+          <img src={googleIcon} alt="Google" className="section-icon" />
+          <span>Login with Google</span>
+        </a>
+      </div>
+    </div>
   </div>
 );
 
