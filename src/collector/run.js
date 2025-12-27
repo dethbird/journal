@@ -10,6 +10,7 @@ import './sources/spotify.js';
 import './sources/steam.js';
 import './sources/timeline.js';
 import './sources/trello.js';
+import './sources/finance.js';
 import { runCollectorCycle } from './runner.js';
 
 const entryFile = fileURLToPath(import.meta.url);

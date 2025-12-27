@@ -151,7 +151,7 @@ model ConnectedAccount {
   oauthTokens        OAuthToken[]
   cursors            Cursor[]
   emailBookmarkSettings EmailBookmarkSettings?
-  googleTimelineSettings GoogleTimelineSettings?
+  googleDriveSources GoogleDriveSource[]
 
   @@unique([userId, provider, providerAccountId])
   @@index([userId, provider])
@@ -198,17 +198,25 @@ model EmailBookmarkSettings {
   connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
 }
 
-model GoogleTimelineSettings {
+model GoogleDriveSource {
   id                 String   @id @default(cuid())
-  connectedAccountId String   @unique
+  connectedAccountId String
   driveFolderId      String?
   driveFileName      String   @default("Timeline.json")
+  sourceType         String   @default("timeline") // 'timeline' or 'finance'
+  institutionId      String?  // For finance sources: 'chase', 'amex', 'generic_csv', etc.
+  institutionName    String?  // For finance sources: 'Chase Bank', 'American Express', etc.
+  nickname           String?  // For finance sources: User-friendly name to differentiate accounts
+  parserFormat       String?  // For finance sources: 'chase_csv', 'amex_csv', etc.
   enabled            Boolean  @default(true)
   lastSyncedAt       DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
   connectedAccount ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  @@index([connectedAccountId])
+  @@index([sourceType])
 }
 
 model OAuthToken {

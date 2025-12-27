@@ -466,13 +466,15 @@ const parseTimelineSegments = function* (data) {
 
 /**
  * Per-account collector function - fetches Timeline.json from Google Drive for a specific user
+ * Now supports multiple Google Drive sources per account
  */
 const collectForAccount = async (account, cursor) => {
   const userId = account.userId;
-  const settings = account.googleTimelineSettings;
+  const driveSources = account.googleDriveSources || [];
+  const enabledSources = driveSources.filter(s => s.enabled && s.driveFolderId);
 
-  if (!settings?.driveFolderId) {
-    console.warn(`[timeline] No driveFolderId configured for user ${userId}, skipping`);
+  if (enabledSources.length === 0) {
+    console.warn(`[timeline] No enabled Google Drive sources configured for user ${userId}, skipping`);
     return { items: [], nextCursor: cursor };
   }
 
@@ -483,8 +485,7 @@ const collectForAccount = async (account, cursor) => {
     return { items: [], nextCursor: cursor };
   }
 
-  const fileName = settings.driveFileName || 'Timeline.json';
-  console.info(`[timeline] Searching for '${fileName}' in folder ${settings.driveFolderId} for user ${userId}`);
+  console.info(`[timeline] Processing ${enabledSources.length} Google Drive source(s) for user ${userId}`);
   console.info(`[timeline] Current cursor: ${cursor || 'none (will process all segments)'}`);
 
   const items = [];
@@ -492,12 +493,17 @@ const collectForAccount = async (account, cursor) => {
   let accessTokenInUse = accessToken;
   let refreshAttempted = false;
 
-  try {
-    let data;
-    let fileInfo;
-    
+  // Process each enabled Google Drive source
+  for (const settings of enabledSources) {
+    const fileName = settings.driveFileName || 'Timeline.json';
+    console.info(`[timeline] Fetching '${fileName}' from folder ${settings.driveFolderId}`);
+
     try {
-      // Search for the most recent file with the specified name in the folder
+      let data;
+      let fileInfo;
+      
+      try {
+        // Search for the most recent file with the specified name in the folder
       fileInfo = await findMostRecentFile(settings.driveFolderId, fileName, accessTokenInUse);
       console.info(`[timeline] Found file: ${fileInfo.name} (${fileInfo.id}), modified: ${fileInfo.modifiedTime}`);
       
@@ -673,14 +679,17 @@ const collectForAccount = async (account, cursor) => {
       console.info(`[timeline] User ${userId}: created ${enrichedCount} weather enrichments`);
     }
 
-    // Update lastSyncedAt
-    await prisma.googleTimelineSettings.update({
-      where: { connectedAccountId: account.id },
+    // Update lastSyncedAt for this specific Google Drive source
+    await prisma.googleDriveSource.update({
+      where: { id: settings.id },
       data: { lastSyncedAt: new Date() },
     });
+    
+    console.info(`[timeline] User ${userId}: completed processing for source ${settings.id}`);
   } catch (err) {
-    console.error(`[timeline] Error fetching Timeline for user ${userId}:`, err.message);
+    console.error(`[timeline] Error fetching Timeline from source ${settings.id} for user ${userId}:`, err.message);
   }
+  } // End of loop over enabledSources
 
   return {
     items,

@@ -92,6 +92,34 @@ const renderGaming = (section) => {
   return lines;
 };
 
+const renderFinance = (section) => {
+  const lines = [formatLine('Finance')];
+  
+  if (!(section.sources ?? []).length) {
+    lines.push('No transactions');
+    return lines;
+  }
+
+  // Show each source (account) as its own section
+  for (const source of section.sources) {
+    lines.push('');
+    lines.push(`${source.name}:`);
+    lines.push(`  ${source.count} transactions · Debits: $${source.debits.toFixed(2)}`);
+    if (source.credits > 0) {
+      lines.push(`  Credits/Payments: -$${source.credits.toFixed(2)}`);
+    }
+    
+    // Show transactions for this source
+    for (const tx of source.transactions) {
+      const sign = tx.amount < 0 ? '-' : '';
+      const absAmount = Math.abs(tx.amount);
+      lines.push(`  • ${tx.date}: ${tx.description} ${sign}$${absAmount.toFixed(2)}`);
+    }
+  }
+
+  return lines;
+};
+
 export const renderTextDigest = (vm) => {
   const lines = [];
   lines.push('Daily Digest');
@@ -112,6 +140,8 @@ export const renderTextDigest = (vm) => {
       lines.push(...renderMusic(section));
     } else if (section.kind === 'gaming') {
       lines.push(...renderGaming(section));
+    } else if (section.kind === 'finance') {
+      lines.push(...renderFinance(section));
     }
   }
 

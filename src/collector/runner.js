@@ -69,11 +69,11 @@ export const runCollectorCycle = async () => {
 
     // If the collector exposes a per-account collector, call that for each connected account.
     if (typeof collectForAccount === 'function') {
-      // Special case: google_timeline uses google provider accounts with timeline settings
-      const accountQuery = source === 'google_timeline'
-        ? { provider: 'google', status: 'active', googleTimelineSettings: { driveFolderId: { not: null } } }
+      // Special case: google_timeline and finance use google provider accounts with drive sources
+      const accountQuery = (source === 'google_timeline' || source === 'finance')
+        ? { provider: 'google', status: 'active', googleDriveSources: { some: { enabled: true } } }
         : { provider: source, status: 'active' };
-      const accounts = await prisma.connectedAccount.findMany({ where: accountQuery, include: { oauthTokens: true, emailBookmarkSettings: true, googleTimelineSettings: true } });
+      const accounts = await prisma.connectedAccount.findMany({ where: accountQuery, include: { oauthTokens: true, emailBookmarkSettings: true, googleDriveSources: true } });
 
       let totalStored = 0;
 
@@ -83,7 +83,19 @@ export const runCollectorCycle = async () => {
           || await prisma.cursor.create({ data: { source, connectedAccountId: account.id } });
         const sinceCursor = cursorRecord.cursor ?? null;
 
-        const { items = [], nextCursor = null } = await collectForAccount(account, sinceCursor);
+        const result = await collectForAccount(account, sinceCursor);
+        
+        // Some collectors (like finance) handle event storage internally and return a summary
+        // Others return { items, nextCursor } for the runner to process
+        if (result?.summary) {
+          // Collector handled storage internally, just log the summary
+          console.log(`[collector] ${source} account ${account.id}:`, result.summary);
+          totalStored += result.summary.created || 0;
+          continue;
+        }
+        
+        // Standard pattern: process returned items
+        const { items = [], nextCursor = null } = result || {};
 
         for (const item of items) {
           const result = await insertEvent(source, item);
