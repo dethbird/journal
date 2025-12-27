@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Select from 'react-select';
 import { CONNECT_PROVIDERS } from '../constants';
 import { FINANCE_INSTITUTIONS, getDefaultFilename } from '../financeConfigs';
 import githubIcon from '../assets/github.ico';
@@ -29,13 +30,12 @@ function ConnectedAccountRow({ provider, connected, onDisconnect }) {
     <div className="box">
       <div className="level">
         <div className="level-left">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
             {iconSrc && (
               <img 
                 src={iconSrc} 
                 alt={provider.name} 
                 className="section-icon"
-                style={{ width: '32px', height: '32px' }}
               />
             )}
             <div>
@@ -1411,55 +1411,68 @@ export default function Settings({ user, onDisconnect }) {
     loadClientId();
   }, []);
 
+  const tabs = [
+    { id: 'general', label: 'General', icon: 'fa-solid fa-user' },
+    { id: 'accounts', label: 'Connected Accounts', icon: 'fa-solid fa-link' },
+    { id: 'google', label: 'Google Timeline', icon: 'fa-brands fa-google' },
+    { id: 'trello', label: 'Trello', icon: 'fa-brands fa-trello' },
+    { id: 'email-delivery', label: 'Email Delivery', icon: 'fa-solid fa-envelope' },
+    { id: 'email-bookmarks', label: 'Email Bookmarks', icon: 'fa-solid fa-bookmark' },
+    { id: 'finance', label: 'Finance', icon: 'fa-solid fa-money-bill' },
+  ];
+
+  const customSelectStyles = {
+    control: (base) => ({
+      ...base,
+      borderColor: '#dbdbdb',
+      '&:hover': { borderColor: '#b5b5b5' },
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isSelected ? '#3273dc' : state.isFocused ? '#f5f5f5' : 'white',
+      color: state.isSelected ? 'white' : '#4a4a4a',
+      display: 'flex',
+      alignItems: 'center',
+      padding: '8px 12px',
+    }),
+  };
+
+  const formatOptionLabel = ({ label, icon }) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <i className={icon} style={{ width: '16px' }} />
+      <span>{label}</span>
+    </div>
+  );
+
   return (
     <div>
       <h1 className="title is-3">Settings</h1>
       
-      <div className="tabs is-boxed">
+      {/* Desktop tabs */}
+      <div className="tabs is-boxed is-hidden-mobile">
         <ul>
-          <li className={activeTab === 'general' ? 'is-active' : ''}>
-            <a onClick={() => setActiveTab('general')}>
-              <span className="icon is-small"><i className="fa-solid fa-user" /></span>
-              <span>General</span>
-            </a>
-          </li>
-          <li className={activeTab === 'accounts' ? 'is-active' : ''}>
-            <a onClick={() => setActiveTab('accounts')}>
-              <span className="icon is-small"><i className="fa-solid fa-link" /></span>
-              <span>Connected Accounts</span>
-            </a>
-          </li>
-          <li className={activeTab === 'google' ? 'is-active' : ''}>
-            <a onClick={() => setActiveTab('google')}>
-              <span className="icon is-small"><i className="fa-brands fa-google" /></span>
-              <span>Google Timeline</span>
-            </a>
-          </li>
-          <li className={activeTab === 'trello' ? 'is-active' : ''}>
-            <a onClick={() => setActiveTab('trello')}>
-              <span className="icon is-small"><i className="fa-brands fa-trello" /></span>
-              <span>Trello</span>
-            </a>
-          </li>
-          <li className={activeTab === 'email-delivery' ? 'is-active' : ''}>
-            <a onClick={() => setActiveTab('email-delivery')}>
-              <span className="icon is-small"><i className="fa-solid fa-envelope" /></span>
-              <span>Email Delivery</span>
-            </a>
-          </li>
-          <li className={activeTab === 'email-bookmarks' ? 'is-active' : ''}>
-            <a onClick={() => setActiveTab('email-bookmarks')}>
-              <span className="icon is-small"><i className="fa-solid fa-bookmark" /></span>
-              <span>Email Bookmarks</span>
-            </a>
-          </li>
-          <li className={activeTab === 'finance' ? 'is-active' : ''}>
-            <a onClick={() => setActiveTab('finance')}>
-              <span className="icon is-small"><i className="fa-solid fa-money-bill" /></span>
-              <span>Finance</span>
-            </a>
-          </li>
+          {tabs.map((tab) => (
+            <li key={tab.id} className={activeTab === tab.id ? 'is-active' : ''}>
+              <a onClick={() => setActiveTab(tab.id)}>
+                <span className="icon is-small"><i className={tab.icon} /></span>
+                <span>{tab.label}</span>
+              </a>
+            </li>
+          ))}
         </ul>
+      </div>
+
+      {/* Mobile select with react-select */}
+      <div className="is-hidden-tablet mb-4">
+        <Select
+          options={tabs}
+          value={tabs.find(t => t.id === activeTab)}
+          onChange={(option) => setActiveTab(option.id)}
+          formatOptionLabel={formatOptionLabel}
+          styles={customSelectStyles}
+          isSearchable={false}
+          getOptionValue={(option) => option.id}
+        />
       </div>
 
       {activeTab === 'general' && <UserGeneralSettings />}
