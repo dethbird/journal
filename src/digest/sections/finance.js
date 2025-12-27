@@ -18,6 +18,12 @@ export const buildFinanceSection = (events) => {
     const institutionName = payload.institutionName || 'Unknown';
     const nickname = payload.nickname || null;
     const amount = payload.amount || 0;
+    const parserFormat = payload.parserFormat || 'amex_csv';
+    
+    // Different institutions use different sign conventions:
+    // - Amex: positive = charge (debit), negative = payment (credit)
+    // - Chase: negative = charge (debit), positive = payment (credit)
+    const isChaseFormat = parserFormat.startsWith('chase');
     
     if (!bySource.has(sourceId)) {
       bySource.set(sourceId, {
@@ -31,21 +37,44 @@ export const buildFinanceSection = (events) => {
     }
 
     const source = bySource.get(sourceId);
+    
+    // Normalize amount based on institution's sign convention
+    // Store as: positive = debit (out), negative = credit (in)
+    let normalizedAmount;
+    if (isChaseFormat) {
+      // Chase: negative = debit, positive = credit
+      // Flip the sign so debits are positive, credits are negative
+      normalizedAmount = -amount;
+    } else {
+      // Amex (default): positive = debit, negative = credit
+      // Keep as-is
+      normalizedAmount = amount;
+    }
+    
     source.transactions.push({
       date: payload.date,
       description: payload.description,
-      amount,
+      amount: normalizedAmount,
       category: payload.category,
       reference: payload.reference,
       occurredAt: evt.occurredAt,
     });
 
-    if (amount < 0) {
-      // Negative amount = payment/credit
-      source.credits += Math.abs(amount);
+    // Apply correct sign convention based on parser format
+    if (isChaseFormat) {
+      // Chase: negative = debit, positive = credit
+      if (amount < 0) {
+        source.debits += Math.abs(amount);
+      } else {
+        source.credits += amount;
+      }
     } else {
-      // Positive amount = charge/debit
-      source.debits += amount;
+      // Amex (default): positive = debit, negative = credit
+      if (amount < 0) {
+        source.credits += Math.abs(amount);
+      } else {
+        source.debits += amount;
+      }
     }
 
     source.count++;

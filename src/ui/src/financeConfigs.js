@@ -6,9 +6,16 @@
 export const FINANCE_INSTITUTIONS = [
   {
     id: 'chase',
-    name: 'Chase Bank',
+    name: 'Chase Bank (Credit Card)',
     parserFormat: 'chase_csv',
-    description: 'Chase Bank CSV export format',
+    description: 'Chase credit card CSV export',
+    defaultFilename: 'activity.csv',
+  },
+  {
+    id: 'chase_checking',
+    name: 'Chase Bank (Checking)',
+    parserFormat: 'chase_checking_csv',
+    description: 'Chase checking account CSV export',
     defaultFilename: 'activity.csv',
   },
   {

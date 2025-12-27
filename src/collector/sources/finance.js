@@ -170,7 +170,7 @@ const parseAmexCSV = (csvContent) => {
 };
 
 /**
- * Parse Chase CSV format
+ * Parse Chase Credit Card CSV format
  * Columns: Transaction Date, Post Date, Description, Category, Type, Amount, Memo
  * Note: Chase uses negative amounts for charges, positive for payments/refunds
  */
@@ -182,8 +182,6 @@ const parseChaseCSV = (csvContent) => {
   });
 
   return records.map((row) => {
-    // Chase amounts are negative for charges, positive for payments
-    // We'll store them as-is and handle display logic in the digest
     const amount = parseFloat(row.Amount) || 0;
     
     return {
@@ -191,11 +189,41 @@ const parseChaseCSV = (csvContent) => {
       postDate: row['Post Date'],
       description: row.Description,
       amount: amount,
-      category: row.Category,
-      type: row.Type, // Payment, Sale, Return, Fee
-      memo: row.Memo,
-      // For reference, use a hash of date + amount + description since Chase doesn't provide unique IDs
+      category: row.Category || '',
+      type: row.Type || '',
+      memo: row.Memo || '',
       reference: `${row['Transaction Date']}-${amount.toFixed(2)}-${row.Description}`.substring(0, 50),
+    };
+  });
+};
+
+/**
+ * Parse Chase Checking Account CSV format
+ * Columns: Details, Posting Date, Description, Amount, Type, Balance, Check or Slip #
+ * Note: Chase uses negative amounts for debits, positive for credits
+ */
+const parseChaseCheckingCSV = (csvContent) => {
+  const records = parse(csvContent, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+    relax_column_count: true,
+  });
+
+  return records.map((row) => {
+    const amount = parseFloat(row.Amount) || 0;
+    const postingDate = row['Posting Date'] || row['Details'];
+    
+    return {
+      date: postingDate,
+      postDate: postingDate,
+      description: row.Description || '',
+      amount: amount,
+      category: row.Category || '',
+      type: row.Type || '',
+      memo: row['Check or Slip #'] || '',
+      balance: row.Balance ? parseFloat(row.Balance) : null,
+      reference: `${postingDate}-${amount.toFixed(2)}-${row.Description || ''}`.substring(0, 50),
     };
   });
 };
@@ -217,6 +245,8 @@ const parseCSV = (csvContent, parserFormat) => {
       return parseAmexCSV(csvContent);
     case 'chase_csv':
       return parseChaseCSV(csvContent);
+    case 'chase_checking_csv':
+      return parseChaseCheckingCSV(csvContent);
     case 'chime_csv':
     case 'generic_csv':
     default:
@@ -245,11 +275,32 @@ const generateExternalId = (sourceId, transaction) => {
 const parseDate = (dateStr) => {
   if (!dateStr) return null;
   
-  const [month, day, year] = dateStr.split('/').map(Number);
-  if (!month || !day || !year) return null;
+  // Handle MM/DD/YYYY format
+  const slashMatch = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (slashMatch) {
+    const [, month, day, year] = slashMatch;
+    return new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0));
+  }
   
-  // Create date at noon UTC to avoid timezone issues
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  // Handle YYYY-MM-DD or MM/DD/YY format
+  const parts = dateStr.split(/[-\/]/);
+  if (parts.length === 3) {
+    let year, month, day;
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD
+      [year, month, day] = parts.map(Number);
+    } else {
+      // MM/DD/YY or MM/DD/YYYY
+      [month, day, year] = parts.map(Number);
+      if (year < 100) year += 2000; // Convert 2-digit year
+    }
+    
+    if (month && day && year) {
+      return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+    }
+  }
+  
+  return null;
 };
 
 /**
@@ -357,6 +408,7 @@ const collectForAccount = async (account, cursor) => {
               institutionId: financeSource.institutionId,
               institutionName: financeSource.institutionName,
               nickname: financeSource.nickname,
+              parserFormat: financeSource.parserFormat, // Store parser format for correct amount interpretation
             },
           },
         });
