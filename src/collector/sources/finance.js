@@ -249,9 +249,20 @@ const parseChimePDF = async (pdfBuffer) => {
 
     // Find transactions section
     const startMarker = 'Transactions';
-    const endMarker = 'Yearly Summary';
     const startIdx = text.indexOf(startMarker);
-    const endIdx = text.indexOf(endMarker);
+    
+    // Try different end markers (checking vs savings statements)
+    const possibleEndMarkers = ['Yearly Summary', 'Program Details', 'Questions?', 'Interest Accrued', 'Annual Percentage'];
+    let endIdx = -1;
+    let usedEndMarker = '';
+    
+    for (const marker of possibleEndMarkers) {
+      const idx = text.indexOf(marker, startIdx);
+      if (idx !== -1 && (endIdx === -1 || idx < endIdx)) {
+        endIdx = idx;
+        usedEndMarker = marker;
+      }
+    }
 
     if (startIdx === -1 || endIdx === -1) {
       console.log('[finance] Could not find transaction section in PDF');
