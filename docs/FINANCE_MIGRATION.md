@@ -12,6 +12,28 @@ All files are pulled from Google Drive folders you specify.
 
 ---
 
+## 0. Backup First! ⚠️
+
+**CRITICAL:** Create a database backup BEFORE making schema changes:
+
+```bash
+cd /home/code/journal
+node scripts/db_dump.js
+```
+
+This creates a timestamped backup in `dumps/` directory. If anything goes wrong, restore with:
+
+```bash
+node scripts/db_restore.js --clean
+```
+
+**Important timing notes:**
+- ✅ Backup BEFORE migration = includes `GoogleTimelineSettings` (can roll back)
+- ✅ Backup AFTER migration = includes `GoogleDriveSource` with finance fields (production state)
+- ⚠️ Don't restore a pre-migration backup to a post-migration database (will revert your changes)
+
+---
+
 ## 1. Database Schema Changes
 
 Since you can't use `prisma db push`, run these SQL commands manually on your VPS database:
@@ -79,19 +101,42 @@ ON "GoogleDriveSource"("sourceType");
 
 -- Step 7: Verify the final schema
 \d "GoogleDriveSource"
+
+-- Step 8: Create a post-migration backup
+-- Exit psql and run: node scripts/db_dump.js
+-- This backup will include the new GoogleDriveSource table with finance fields
 ```
 
-### Schema Overview
+**Schema Migration Verification:**
 
-- `sourceType`: `'timeline'` or `'finance'` - discriminates between timeline and finance sources
-- `institutionId`: Institution identifier (e.g., `'chase'`, `'amex'`, `'chime'`)
-- `institutionName`: Display name (e.g., `'Chase Bank (Credit Card)'`, `'American Express'`)
-- `nickname`: Optional nickname to distinguish multiple accounts (e.g., `'AMZ'`, `'1005'`, `'Checking'`)
-- `parserFormat`: Parser to use (`'amex_csv'`, `'chase_csv'`, `'chase_checking_csv'`, `'chime_pdf'`)
+After running the SQL above, verify the schema is correct:
+
+```bash
+# Verify GoogleDriveSource exists and has all columns
+PGPASSWORD=your_password psql "postgresql://your_host:5432/journal?user=journal" \
+  -c "\d \"GoogleDriveSource\""
+
+# Should show columns: id, connectedAccountId, driveFolderId, driveFileName, 
+# sourceType, institutionId, institutionName, nickname, parserFormat, 
+# enabled, lastSyncedAt, createdAt, updatedAt
+```
 
 ---
 
-## 2. Install Dependencies
+## 2. Create Post-Migration Backup
+
+After schema changes, create a new backup:
+
+```bash
+cd /home/code/journal
+node scripts/db_dump.js
+```
+
+This backup includes the new schema and can be used to restore your VPS to this state.
+
+---
+
+## 3. Install Dependencies
 
 The finance feature requires `pdf-parse` for Chime PDF statements:
 
@@ -102,7 +147,7 @@ npm install pdf-parse@1.1.1
 
 ---
 
-## 3. Deploy Code Changes
+## 4. Deploy Code Changes
 
 ### Option A: Git Pull (if using git)
 
@@ -138,7 +183,7 @@ npm run ui:build
 
 ---
 
-## 4. Restart Services
+## 5. Restart Services
 
 ```bash
 # If using PM2
@@ -149,7 +194,7 @@ pm2 restart evidence-journal
 
 ---
 
-## 5. Configure Finance Sources
+## 6. Configure Finance Sources
 
 ### A. Connect Google Account (First Time Only)
 
@@ -177,7 +222,7 @@ If you haven't already connected your Google account:
    - **Nickname** (optional, to distinguish multiple accounts)
 5. Click **Save**
 
-**Note:** If you see an error about missing ConnectedAccount, ensure you've completed Step 5A above (Connect Google Account).
+**Note:** If you see an error about missing ConnectedAccount, ensure you've completed Step 6A above (Connect Google Account).
 
 ### C. Google Drive Setup
 
@@ -197,7 +242,7 @@ For each institution, create a Google Drive folder and upload your statements:
 
 ---
 
-## 6. Run the Collector
+## 7. Run the Collector
 
 ### Manual Run
 
@@ -223,7 +268,7 @@ npm run collector:run finance
 
 ---
 
-## 7. View in Digest
+## 8. View in Digest
 
 The digest will automatically include finance sections when transactions exist:
 
@@ -237,7 +282,7 @@ DIGEST_RANGE_HOURS=720 npm run digest:run
 
 ---
 
-## 8. Supported File Formats
+## 9. Supported File Formats
 
 ### American Express CSV
 ```csv
@@ -267,7 +312,7 @@ DEBIT,06/11/2025,PAY BY BANK PURCHASE,-103.90,ACH_DEBIT,7305.82,,
 
 ---
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 ### Issue: "Could not find transaction section in PDF"
 - Chime PDF format changed
@@ -294,7 +339,7 @@ DEBIT,06/11/2025,PAY BY BANK PURCHASE,-103.90,ACH_DEBIT,7305.82,,
 
 ---
 
-## 10. Automation
+## 11. Automation
 
 ### Add to Cron
 
@@ -314,7 +359,7 @@ See `docs/systemd/CRON.md` for systemd timer setup.
 
 ---
 
-## 11. Data Model
+## 12. Data Model
 
 ### Event Structure
 
@@ -358,7 +403,7 @@ The digest normalizes all amounts so:
 
 ---
 
-## 12. Adding New Institution Parsers
+## 13. Adding New Institution Parsers
 
 To add support for a new institution:
 
