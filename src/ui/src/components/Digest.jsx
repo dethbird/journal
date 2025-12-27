@@ -279,8 +279,8 @@ const MusicSection = ({ section, inCard = false }) => {
         {summary.durationLabel ? ` · ${summary.durationLabel}` : ''}
       </p>
       {summary.topGenres?.length ? (
-        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-          <p className="is-size-7 has-text-weight-semibold" style={{ marginBottom: '4px' }}>Top genres:</p>
+        <div className="mt-3 mb-3">
+          <p className="is-size-7 has-text-weight-semibold mb-1">Top genres:</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {summary.topGenres.map((g, idx) => {
               const label = encodeURIComponent(g.name);
@@ -288,15 +288,15 @@ const MusicSection = ({ section, inCard = false }) => {
               const labelBg = 'F3F4F6';
               const messageColor = '7F8790';
               const color = messageColor;
-              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}`;
+              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=social&labelColor=${labelBg}`;
               return <img key={g.name} src={src} alt={`${g.name}: ${g.percent}%`} />;
             })}
           </div>
         </div>
       ) : null}
       {summary.topArtists?.length ? (
-        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-          <p className="is-size-7 has-text-weight-semibold" style={{ marginBottom: '4px' }}>Top artists:</p>
+        <div className="mt-3 mb-3">
+          <p className="is-size-7 has-text-weight-semibold mb-1">Top artists:</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {summary.topArtists.map((a, idx) => {
               const label = encodeURIComponent(a.name);
@@ -304,15 +304,15 @@ const MusicSection = ({ section, inCard = false }) => {
               const labelBg = 'F3F4F6';
               const messageColor = '7F8790';
               const color = messageColor;
-              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}`;
+              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=social&labelColor=${labelBg}`;
               return <img key={a.name} src={src} alt={`${a.name}: ${a.count}`} />;
             })}
           </div>
         </div>
       ) : null}
       {summary.topTracks?.length ? (
-        <div style={{ marginTop: '8px', marginBottom: '8px' }}>
-          <p className="is-size-7 has-text-weight-semibold" style={{ marginBottom: '4px' }}>Most played:</p>
+        <div className="mt-3 mb-3">
+          <p className="is-size-7 has-text-weight-semibold mb-1">Most played:</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {summary.topTracks.map((t, idx) => {
               const label = encodeURIComponent(t.name);
@@ -320,7 +320,7 @@ const MusicSection = ({ section, inCard = false }) => {
               const labelBg = 'F3F4F6';
               const messageColor = '7F8790';
               const color = messageColor;
-              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=flat&labelColor=${labelBg}`;
+              const src = `https://img.shields.io/static/v1?label=${label}&message=${value}&color=${color}&style=social&labelColor=${labelBg}`;
               return <img key={t.name} src={src} alt={`${t.name}: ${t.count}`} />;
             })}
           </div>
@@ -330,35 +330,51 @@ const MusicSection = ({ section, inCard = false }) => {
       <div className="mt-3">
         {section.plays?.length ? (
           section.plays.map((play, idx) => (
-            <div key={`${play.trackName}-${idx}`} className="mb-2 is-flex is-align-items-center">
-              {play.albumImage ? (
-                <div className="mr-3">
-                  {play.url ? (
-                    <a href={play.url} target="_blank" rel="noreferrer">
-                      <img src={play.albumImage} alt="" className="album-thumb" />
-                    </a>
-                  ) : (
-                    <img src={play.albumImage} alt="" className="album-thumb" />
-                  )}
+            <div key={`${play.trackName}-${idx}`} className="card mb-3">
+              <div className="card-content">
+                <div className="media">
+                  {play.albumImage ? (
+                    <div className="media-left">
+                      {play.url ? (
+                        <a href={play.url} target="_blank" rel="noreferrer">
+                          <figure className="image is-64x64">
+                            <img src={play.albumImage} alt="" style={{ borderRadius: '6px' }} />
+                          </figure>
+                        </a>
+                      ) : (
+                        <figure className="image is-64x64">
+                          <img src={play.albumImage} alt="" style={{ borderRadius: '6px' }} />
+                        </figure>
+                      )}
+                    </div>
+                  ) : null}
+                  <div className="media-content">
+                    <p className="has-text-weight-semibold">
+                      {play.uri ? (
+                        <a href={play.uri} className="has-text-weight-semibold" target="_blank" rel="noreferrer">
+                          {play.trackName}
+                        </a>
+                      ) : (
+                        play.trackName
+                      )}
+                    </p>
+                    {play.artists?.length ? (
+                      <p className="is-size-7 has-text-grey">{play.artists.join(', ')}</p>
+                    ) : null}
+                    {play.genres?.length ? (
+                      <div className="tags" style={{ marginTop: '4px', marginBottom: '4px' }}>
+                        {play.genres.map((genre) => (
+                          <span key={genre} className="tag is-light is-extra-small">{genre}</span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {play.playedAt ? (
+                      <p className="is-size-7 has-text-grey">
+                        {new Date(play.playedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
-              ) : null}
-              <div>
-                <p className="has-text-weight-semibold">
-                  {play.uri ? (
-                    <a href={play.uri} className="has-text-weight-semibold" target="_blank" rel="noreferrer">
-                      {play.trackName}
-                    </a>
-                  ) : (
-                    play.trackName
-                  )}
-                  {play.artists?.length ? <span className="has-text-grey"> — {play.artists.join(', ')}</span> : null}
-                </p>
-                {play.playedAt ? (
-                  <p className="is-size-7 has-text-grey">Played {formatTime(play.playedAt)}</p>
-                ) : null}
-                {play.genres?.length ? (
-                  <p className="is-size-7 has-text-grey">Genres: {play.genres.join(', ')}</p>
-                ) : null}
               </div>
             </div>
           ))

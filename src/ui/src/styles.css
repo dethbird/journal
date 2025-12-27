@@ -98,6 +98,14 @@ ul {
   gap: 0.5rem;
 }
 
+/* Extra small tags for genre display */
+.tag.is-extra-small {
+  font-size: 0.75rem;
+  padding: 0.2em 0.5em;
+  height: auto;
+  line-height: 1.2;
+}
+
 /* Journal entry styling */
 .journal-entry {
   background: #fefcf9;
