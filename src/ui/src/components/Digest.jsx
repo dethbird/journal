@@ -132,7 +132,7 @@ const GithubSection = ({ section, inCard = false }) => {
         </div>
       ) : null}
 
-      <p className="is-size-7 has-text-weight-semibold mt-3">
+      <p className="is-size-6 has-text-weight-semibold mt-3">
         Summary: {section.summary?.commits ?? 0} commits · {section.summary?.repoCount ?? 0} repos ·{' '}
         {section.summary?.prCount ?? 0} PRs
       </p>
@@ -280,7 +280,7 @@ const MusicSection = ({ section, inCard = false }) => {
       </p>
       {summary.topGenres?.length ? (
         <div className="mt-3 mb-3">
-          <p className="is-size-7 has-text-weight-semibold mb-1">Top genres:</p>
+          <p className="is-size-6 has-text-weight-semibold mb-1">Top genres:</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {summary.topGenres.map((g, idx) => {
               const label = encodeURIComponent(g.name);
@@ -296,7 +296,7 @@ const MusicSection = ({ section, inCard = false }) => {
       ) : null}
       {summary.topArtists?.length ? (
         <div className="mt-3 mb-3">
-          <p className="is-size-7 has-text-weight-semibold mb-1">Top artists:</p>
+          <p className="is-size-6 has-text-weight-semibold mb-1">Top artists:</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {summary.topArtists.map((a, idx) => {
               const label = encodeURIComponent(a.name);
@@ -312,7 +312,7 @@ const MusicSection = ({ section, inCard = false }) => {
       ) : null}
       {summary.topTracks?.length ? (
         <div className="mt-3 mb-3">
-          <p className="is-size-7 has-text-weight-semibold mb-1">Most played:</p>
+          <p className="is-size-6 has-text-weight-semibold mb-1">Most played:</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {summary.topTracks.map((t, idx) => {
               const label = encodeURIComponent(t.name);
@@ -330,25 +330,23 @@ const MusicSection = ({ section, inCard = false }) => {
       <div className="mt-3">
         {section.plays?.length ? (
           section.plays.map((play, idx) => (
-            <div key={`${play.trackName}-${idx}`} className="card mb-3">
-              <div className="card-content">
-                <div className="media">
-                  {play.albumImage ? (
-                    <div className="media-left">
-                      {play.url ? (
-                        <a href={play.url} target="_blank" rel="noreferrer">
-                          <figure className="image is-64x64">
-                            <img src={play.albumImage} alt="" style={{ borderRadius: '6px' }} />
-                          </figure>
-                        </a>
-                      ) : (
-                        <figure className="image is-64x64">
-                          <img src={play.albumImage} alt="" style={{ borderRadius: '6px' }} />
-                        </figure>
-                      )}
-                    </div>
-                  ) : null}
-                  <div className="media-content">
+            <div key={`${play.trackName}-${idx}`} className="media mb-4">
+              {play.albumImage ? (
+                <div className="media-left">
+                  {play.url ? (
+                    <a href={play.url} target="_blank" rel="noreferrer">
+                      <figure className="image is-96x96">
+                        <img src={play.albumImage} alt="" style={{ borderRadius: '6px' }} />
+                      </figure>
+                    </a>
+                  ) : (
+                    <figure className="image is-96x96">
+                      <img src={play.albumImage} alt="" style={{ borderRadius: '6px' }} />
+                    </figure>
+                  )}
+                </div>
+              ) : null}
+              <div className="media-content">
                     <p className="has-text-weight-semibold">
                       {play.uri ? (
                         <a href={play.uri} className="has-text-weight-semibold" target="_blank" rel="noreferrer">
@@ -375,17 +373,15 @@ const MusicSection = ({ section, inCard = false }) => {
                     ) : null}
                   </div>
                 </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="has-text-grey">No recent plays</p>
-        )}
-      </div>
-    </>
-  );
-
-  if (inCard) return <div>{content}</div>;
+            ))
+          ) : (
+            <p className="has-text-grey">No recent plays</p>
+          )}
+        </div>
+      </>
+    );
+  
+    if (inCard) return <div>{content}</div>;
 
   return (
     <div className="box">
@@ -571,64 +567,71 @@ const GamingSection = ({ section, inCard = false }) => {
 
       {section.topGames?.length ? (
         <div className="mt-3">
-          <p className="is-size-7 has-text-weight-semibold mb-2">{snapshotLabel}</p>
+          <p className="is-size-6 has-text-weight-semibold mb-2">{snapshotLabel}</p>
           {section.topGames.map((game) => (
-            <div key={game.appid} className="mb-2 is-flex is-align-items-center">
-              {game.iconUrl ? (
-                <div className="mr-3">
+            <div key={game.appid} className="media mb-4">
+              {(game.logoUrl || game.iconUrl) ? (
+                <div className="media-left">
                   {game.storeUrl ? (
                     <a href={game.storeUrl} target="_blank" rel="noreferrer">
-                      <img src={game.iconUrl} alt="" className="game-icon" style={{ width: '32px', height: '32px', borderRadius: '4px' }} />
+                      <figure className="image is-48x48">
+                        <img src={game.logoUrl || game.iconUrl} alt="" style={{ borderRadius: '4px' }} />
+                      </figure>
                     </a>
                   ) : (
-                    <img src={game.iconUrl} alt="" className="game-icon" style={{ width: '32px', height: '32px', borderRadius: '4px' }} />
+                    <figure className="image is-48x48">
+                      <img src={game.logoUrl || game.iconUrl} alt="" style={{ borderRadius: '4px' }} />
+                    </figure>
                   )}
                 </div>
               ) : null}
-              <div>
-                <p className="has-text-weight-semibold">
-                  {game.storeUrl ? (
-                    <a href={game.storeUrl} target="_blank" rel="noreferrer">
-                      {game.name}
-                    </a>
-                  ) : (
-                    game.name
-                  )}
-                </p>
-                <p className="is-size-7 has-text-grey">{game.durationLabel || `${game.minutes}m`}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="has-text-grey mt-2">No games played</p>
-      )}
+              <div className="media-content">
+                    <p className="has-text-weight-semibold">
+                      {game.storeUrl ? (
+                        <a href={game.storeUrl} target="_blank" rel="noreferrer">
+                          {game.name}
+                        </a>
+                      ) : (
+                        game.name
+                      )}
+                    </p>
+                    <p className="is-size-7 has-text-grey">{game.durationLabel || `${game.minutes}m`}</p>
+                  </div>
+                </div>
+            ))}
+          </div>
+        ) : (
+          <p className="has-text-grey mt-2">No games played</p>
+        )}
 
       {section.achievements?.length ? (
         <div className="mt-4">
-          <p className="is-size-7 has-text-weight-semibold mb-2">Achievements unlocked:</p>
+          <p className="is-size-6 has-text-weight-semibold mb-2">Achievements unlocked:</p>
           {section.achievements.map((achievement, idx) => (
-            <div key={`${achievement.appid}-${achievement.achievementName}-${idx}`} className="mb-2" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+            <div key={`${achievement.appid}-${achievement.achievementName}-${idx}`} className="media mb-4">
               {achievement.achievementIconUrl ? (
-                <img 
-                  src={achievement.achievementIconUrl} 
-                  alt={achievement.achievementName}
-                  className="achievement-badge"
-                  style={{ width: '64px', height: '64px', objectFit: 'cover', flexShrink: 0 }}
-                />
+                <div className="media-left">
+                  <figure className="image is-64x64">
+                    <img 
+                      src={achievement.achievementIconUrl} 
+                      alt={achievement.achievementName}
+                      style={{ borderRadius: '4px', objectFit: 'cover' }}
+                    />
+                  </figure>
+                </div>
               ) : (
-                <span className="mr-1" style={{ fontSize: '2rem' }}>🏆</span>
+                <div className="media-left">
+                  <span style={{ fontSize: '2rem' }}>🏆</span>
+                </div>
               )}
-              <div style={{ flex: 1 }}>
-                <p>
-                  <span className="has-text-weight-medium">{achievement.achievementName}</span>
-                  <span className="has-text-grey is-size-7 ml-2">in {achievement.gameName}</span>
-                </p>
+              <div className="media-content">
+                <p className="has-text-weight-semibold">{achievement.achievementName}</p>
+                <p className="is-size-7 has-text-grey">in {achievement.gameName}</p>
                 {achievement.achievementDescription ? (
-                  <p className="is-size-7 has-text-grey">{achievement.achievementDescription}</p>
+                  <p className="is-size-7 has-text-grey mt-1">{achievement.achievementDescription}</p>
                 ) : null}
                 {achievement.unlockedAt ? (
-                  <p className="is-size-7 has-text-grey">{formatAchievementTime(achievement.unlockedAt)}</p>
+                  <p className="is-size-7 has-text-grey mt-1">{formatAchievementTime(achievement.unlockedAt)}</p>
                 ) : null}
               </div>
             </div>
