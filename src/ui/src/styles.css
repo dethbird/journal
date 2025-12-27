@@ -62,10 +62,23 @@ ul {
 
 /* Digest thumbnails */
 .bookmark-thumb {
-  width: 96px;
+  width: 100%;
+  max-width: 100%;
   height: auto;
   border-radius: 6px;
   display: block;
+  margin-bottom: 0.75rem;
+}
+
+/* Stack bookmark content vertically on all screens */
+.box .mb-3.is-flex {
+  flex-direction: column;
+}
+
+.box .mb-3.is-flex > div.mr-3 {
+  margin-right: 0;
+  margin-bottom: 0.75rem;
+  width: 100%;
 }
 
 .album-thumb {
@@ -139,3 +152,32 @@ ul {
   vertical-align: middle;
 }
 
+/* Reduce horizontal padding on mobile devices */
+@media (max-width: 768px) {
+  .hero-body {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  
+  .container {
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  
+  .box {
+    margin-left: 0;
+    margin-right: 0;
+  }
+  
+  /* Consistent vertical spacing between columns on mobile */
+  .columns.is-multiline {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  
+  .columns.is-multiline > .column {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+  }
+}
