@@ -180,20 +180,20 @@ const BookmarkSection = ({ section, onDeleteBookmark }) => {
                 {item.excerpt ? <p className="is-size-7 mt-2">{item.excerpt}</p> : null}
                 {item.occurredAt || item.sourceDomain ? (
                   <p className="is-size-7 has-text-grey mt-2">
-                    {item.occurredAt ? `Saved ${formatTime(item.occurredAt)}` : ''}
-                    {item.sourceDomain ? ` | via ${item.sourceDomain}` : ''}
+                    {item.occurredAt ? new Date(item.occurredAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : ''}
+                    {item.sourceDomain ? ` · via ${item.sourceDomain}` : ''}
+                    {item.id && onDeleteBookmark ? (
+                      <button
+                        className="delete is-small ml-2"
+                        onClick={() => onDeleteBookmark(item.id)}
+                        title="Delete bookmark"
+                        aria-label="Delete bookmark"
+                        style={{ verticalAlign: 'middle' }}
+                      />
+                    ) : null}
                   </p>
                 ) : null}
               </div>
-              {item.id && onDeleteBookmark ? (
-                <button
-                  className="delete is-pulled-right"
-                  onClick={() => onDeleteBookmark(item.id)}
-                  title="Delete bookmark"
-                  aria-label="Delete bookmark"
-                  style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }}
-                />
-              ) : null}
             </div>
           </div>
         ))
@@ -428,7 +428,9 @@ const TimelineSection = ({ section, inCard = false }) => {
                 {item.distance ? <span className="has-text-grey"> · {item.distance}</span> : null}
               </p>
               {item.occurredAt ? (
-                <p className="is-size-7 has-text-grey">{formatTime(item.occurredAt)}</p>
+                <p className="is-size-7 has-text-grey">
+                  {new Date(item.occurredAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                </p>
               ) : null}
               {item.destinations?.length ? (
                 <p className="is-size-7">{item.destinations.join(' → ')}</p>
@@ -544,9 +546,7 @@ const GamingSection = ({ section, inCard = false }) => {
   if (!section) return null;
   const summary = section.summary ?? {};
 
-  const snapshotLabel = summary.snapshotDate
-    ? `Recent gameplay (last 2 weeks per Steam, as of ${summary.snapshotDate}):`
-    : 'Recent gameplay (last 2 weeks per Steam):';
+  const snapshotLabel = 'Last 2 weeks of gameplay';
 
   const formatAchievementTime = (iso) => {
     if (!iso) return '';
