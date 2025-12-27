@@ -730,12 +730,34 @@ export default function Digest({ offsetDays = 0, onWeather }) {
     let cancelled = false;
     const { start, end } = buildWindow(offsetDays);
     const dateISO = formatDateISO(start);
+    const isToday = offsetDays === 0;
+    const cacheKey = `digest-${dateISO}`;
 
     const load = async () => {
       try {
         setState({ loading: true, error: null, vm: null });
         setLogs([]);
         setGoals([]);
+
+        // Check cache for past days (not today)
+        if (!isToday) {
+          const cachedData = localStorage.getItem(cacheKey);
+          if (cachedData) {
+            try {
+              const parsed = JSON.parse(cachedData);
+              if (!cancelled) {
+                setState({ loading: false, error: null, vm: parsed.digestData });
+                setLogs(parsed.logsData);
+                setGoals(parsed.goalsData);
+                if (onWeather) onWeather(parsed.digestData?.weather ?? null);
+              }
+              return;
+            } catch (e) {
+              // Invalid cache, continue to fetch
+              localStorage.removeItem(cacheKey);
+            }
+          }
+        }
 
         // Fetch digest, logs, and goals in parallel
         const [digestRes, logsRes, goalsRes] = await Promise.all([
@@ -767,6 +789,19 @@ export default function Digest({ offsetDays = 0, onWeather }) {
           setLogs(logsData);
           setGoals(goalsData);
           
+          // Cache data for past days only
+          if (!isToday) {
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify({
+                digestData,
+                logsData,
+                goalsData,
+              }));
+            } catch (e) {
+              // localStorage might be full, ignore
+            }
+          }
+          
           try {
             if (onWeather) onWeather(digestData?.weather ?? null);
           } catch (e) {
@@ -794,6 +829,12 @@ export default function Digest({ offsetDays = 0, onWeather }) {
       if (!res.ok) throw new Error('Failed to toggle goal');
       const data = await res.json();
       setGoals((prev) => prev.map((g) => (g.id === goalId ? data.goal : g)));
+      
+      // Invalidate cache for the current day when a goal is toggled
+      const { start } = buildWindow(offsetDays);
+      const dateISO = formatDateISO(start);
+      const cacheKey = `digest-${dateISO}`;
+      localStorage.removeItem(cacheKey);
     } catch (err) {
       console.error('Toggle goal error:', err);
     }
