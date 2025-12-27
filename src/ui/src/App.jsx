@@ -154,7 +154,17 @@ function App() {
   const [state, setState] = useState({ loading: true, user: null, error: null });
   const [path, setPath] = useState(window.location.pathname || '/');
   const [sendState, setSendState] = useState({ sending: false, message: null, error: null });
-  const [offsetDays, setOffsetDays] = useState(0);
+  
+  // Initialize offsetDays from localStorage if available
+  const [offsetDays, setOffsetDays] = useState(() => {
+    try {
+      const stored = localStorage.getItem('digestOffsetDays');
+      return stored !== null ? parseInt(stored, 10) : 0;
+    } catch (e) {
+      return 0;
+    }
+  });
+  
   const [collectorStatus, setCollectorStatus] = useState(null);
   const [showCalendar, setShowCalendar] = useState(false);
   const [dateRange, setDateRange] = useState({ minDate: null, maxDate: null });
@@ -175,6 +185,15 @@ function App() {
   const selectedDate = new Date(todayStart.getTime() + offsetDays * DAY_MS);
   const selectedDateISO = formatDateISO(selectedDate);
   const selectedDateLabel = formatDateLabel(selectedDate);
+
+  // Persist offsetDays to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('digestOffsetDays', offsetDays.toString());
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  }, [offsetDays]);
 
   useEffect(() => {
     const onPop = () => setPath(window.location.pathname || '/');
@@ -429,6 +448,11 @@ function App() {
                         setPath('/');
                         setOffsetDays(0);
                         setShowCalendar(false);
+                        try {
+                          localStorage.removeItem('digestOffsetDays');
+                        } catch (e) {
+                          // Ignore localStorage errors
+                        }
                       }}
                     >
                       <span className="icon">

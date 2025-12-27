@@ -8,6 +8,9 @@ import steamIcon from '../assets/steam.ico';
 import timelineIcon from '../assets/timeline.ico';
 import journalIcon from '../assets/journal.ico';
 import bookmarksIcon from '../assets/bookmarks.ico';
+import amexIcon from '../assets/amex.ico';
+import chimeIcon from '../assets/chime.ico';
+import chaseIcon from '../assets/chase.ico';
 import { marked } from 'marked';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -207,9 +210,21 @@ const FinanceSection = ({ source }) => {
     return `${sign}$${abs.toFixed(2)}`;
   };
 
+  const getFinanceIcon = (institutionId) => {
+    if (institutionId === 'amex') return amexIcon;
+    if (institutionId === 'chime') return chimeIcon;
+    if (institutionId === 'chase') return chaseIcon;
+    return null;
+  };
+
+  const icon = getFinanceIcon(source.institutionId);
+
   return (
     <div className="box">
-      <p className="title is-5">{source.name}</p>
+      <p className="title is-5">
+        {icon && <img src={icon} alt={source.institutionName || 'Finance'} className="section-icon" />}
+        {source.name}
+      </p>
       
       <div className="mb-3">
         <p className="is-size-6">

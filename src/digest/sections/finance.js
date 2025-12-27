@@ -15,6 +15,7 @@ export const buildFinanceSection = (events) => {
   for (const evt of events) {
     const payload = evt.payload || {};
     const sourceId = payload.sourceId || 'unknown';
+    const institutionId = payload.institutionId || null;
     const institutionName = payload.institutionName || 'Unknown';
     const nickname = payload.nickname || null;
     const amount = payload.amount || 0;
@@ -28,6 +29,7 @@ export const buildFinanceSection = (events) => {
     if (!bySource.has(sourceId)) {
       bySource.set(sourceId, {
         sourceId,
+        institutionId,
         name: nickname ? `${institutionName} - ${nickname}` : institutionName,
         transactions: [],
         debits: 0,   // positive amounts (money spent)
