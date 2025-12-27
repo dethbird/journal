@@ -170,6 +170,37 @@ const parseAmexCSV = (csvContent) => {
 };
 
 /**
+ * Parse Chase CSV format
+ * Columns: Transaction Date, Post Date, Description, Category, Type, Amount, Memo
+ * Note: Chase uses negative amounts for charges, positive for payments/refunds
+ */
+const parseChaseCSV = (csvContent) => {
+  const records = parse(csvContent, {
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+  });
+
+  return records.map((row) => {
+    // Chase amounts are negative for charges, positive for payments
+    // We'll store them as-is and handle display logic in the digest
+    const amount = parseFloat(row.Amount) || 0;
+    
+    return {
+      date: row['Transaction Date'],
+      postDate: row['Post Date'],
+      description: row.Description,
+      amount: amount,
+      category: row.Category,
+      type: row.Type, // Payment, Sale, Return, Fee
+      memo: row.Memo,
+      // For reference, use a hash of date + amount + description since Chase doesn't provide unique IDs
+      reference: `${row['Transaction Date']}-${amount.toFixed(2)}-${row.Description}`.substring(0, 50),
+    };
+  });
+};
+
+/**
  * Generic CSV parser - will be used for other institution types
  */
 const parseGenericCSV = (csvContent) => {
@@ -185,6 +216,7 @@ const parseCSV = (csvContent, parserFormat) => {
     case 'amex_csv':
       return parseAmexCSV(csvContent);
     case 'chase_csv':
+      return parseChaseCSV(csvContent);
     case 'chime_csv':
     case 'generic_csv':
     default:
