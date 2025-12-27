@@ -162,36 +162,39 @@ const BookmarkSection = ({ section, onDeleteBookmark }) => {
       </p>
       {section.items?.length ? (
         section.items.map((item) => (
-          <div key={item.url} className="mb-3 is-flex">
+          <div key={item.url} className="card mb-4">
             {item.imageUrl ? (
-              <div className="mr-3">
-                <a href={item.url} target="_blank" rel="noreferrer">
-                  <img src={item.imageUrl} alt="" className="bookmark-thumb" />
-                </a>
+              <div className="card-image">
+                <figure className="image">
+                  <a href={item.url} target="_blank" rel="noreferrer">
+                    <img src={item.imageUrl} alt={item.title || ''} />
+                  </a>
+                </figure>
               </div>
             ) : null}
-            <div className="is-flex-grow-1">
-              <a href={item.url} target="_blank" rel="noreferrer" className="has-text-weight-semibold">
-                {item.title}
-              </a>
-              {item.excerpt ? <p className="is-size-7 mt-1">{item.excerpt}</p> : null}
-              {item.occurredAt || item.sourceDomain ? (
-                <p className="is-size-7 has-text-grey mt-1">
-                  {item.occurredAt ? `Saved ${formatTime(item.occurredAt)}` : ''}
-                  {item.sourceDomain ? ` | via ${item.sourceDomain}` : ''}
-                </p>
-              ) : null}
-            </div>
-            {item.id && onDeleteBookmark ? (
-              <div className="ml-2">
+            <div className="card-content">
+              <div className="content">
+                <a href={item.url} target="_blank" rel="noreferrer" className="has-text-weight-semibold is-size-6">
+                  {item.title}
+                </a>
+                {item.excerpt ? <p className="is-size-7 mt-2">{item.excerpt}</p> : null}
+                {item.occurredAt || item.sourceDomain ? (
+                  <p className="is-size-7 has-text-grey mt-2">
+                    {item.occurredAt ? `Saved ${formatTime(item.occurredAt)}` : ''}
+                    {item.sourceDomain ? ` | via ${item.sourceDomain}` : ''}
+                  </p>
+                ) : null}
+              </div>
+              {item.id && onDeleteBookmark ? (
                 <button
-                  className="delete is-small"
+                  className="delete is-pulled-right"
                   onClick={() => onDeleteBookmark(item.id)}
                   title="Delete bookmark"
                   aria-label="Delete bookmark"
+                  style={{ position: 'absolute', top: '0.5rem', right: '0.5rem' }}
                 />
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         ))
       ) : (

@@ -61,13 +61,25 @@ ul {
 }
 
 /* Digest thumbnails */
-.bookmark-thumb {
-  width: 100%;
-  max-width: 100%;
+.album-thumb {
+  width: 64px;
   height: auto;
   border-radius: 6px;
   display: block;
-  margin-bottom: 0.75rem;
+}
+
+/* Bookmark cards styling */
+.card {
+  border: 1px solid #e2e8f0;
+  box-shadow: none;
+}
+
+.card .card-image img {
+  border-radius: 6px 6px 0 0;
+}
+
+.card .card-content {
+  position: relative;
 }
 
 /* Stack bookmark content vertically on all screens */
@@ -79,13 +91,6 @@ ul {
   margin-right: 0;
   margin-bottom: 0.75rem;
   width: 100%;
-}
-
-.album-thumb {
-  width: 64px;
-  height: auto;
-  border-radius: 6px;
-  display: block;
 }
 
 /* small utility gap class used in Settings */
