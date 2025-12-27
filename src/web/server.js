@@ -1484,13 +1484,16 @@ app.post('/api/finance-sources', async (request, reply) => {
   const user = await getSessionUser(request);
   if (!user) return reply.status(401).send({ error: 'Not authenticated' });
 
-  const { id, driveFolderId, driveFileName, institutionId, institutionName, parserFormat, enabled } = request.body || {};
+  const { id, driveFolderId, driveFileName, institutionId, institutionName, parserFormat, enabled, nickname } = request.body || {};
   
   if (!driveFolderId) {
     return reply.status(400).send({ error: 'driveFolderId is required' });
   }
   if (!institutionId || !institutionName || !parserFormat) {
     return reply.status(400).send({ error: 'institutionId, institutionName, and parserFormat are required' });
+  }
+  if (!nickname || !nickname.trim()) {
+    return reply.status(400).send({ error: 'nickname is required for finance sources' });
   }
 
   const account = await prisma.connectedAccount.findFirst({
@@ -1511,7 +1514,7 @@ app.post('/api/finance-sources', async (request, reply) => {
         driveFileName: driveFileName || 'activity.csv',
         institutionId,
         institutionName,
-        nickname: request.body.nickname || null,
+        nickname: nickname.trim(),
         parserFormat,
         enabled: enabled !== undefined ? enabled : true,
       },
@@ -1526,7 +1529,7 @@ app.post('/api/finance-sources', async (request, reply) => {
         driveFileName: driveFileName || 'activity.csv',
         institutionId,
         institutionName,
-        nickname: request.body.nickname || null,
+        nickname: nickname.trim(),
         parserFormat,
         enabled: enabled !== undefined ? enabled : true,
       },

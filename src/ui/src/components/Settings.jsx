@@ -1280,7 +1280,7 @@ function FinanceSourcesForm({ connected, googleClientId }) {
           </div>
 
           <div className="field mt-3">
-            <label className="label">Nickname (optional)</label>
+            <label className="label">Nickname <span className="has-text-danger">*</span></label>
             <div className="control">
               <input
                 type="text"
@@ -1294,7 +1294,7 @@ function FinanceSourcesForm({ connected, googleClientId }) {
                 disabled={!connected}
               />
             </div>
-            <p className="help">A friendly name to differentiate multiple accounts from the same institution</p>
+            <p className="help">Required - A friendly name to differentiate multiple accounts from the same institution</p>
           </div>
 
           <div className="field mt-3">
@@ -1361,7 +1361,7 @@ function FinanceSourcesForm({ connected, googleClientId }) {
                 type="button"
                 className={`button is-primary${state.saving ? ' is-loading' : ''}`}
                 onClick={handleSave}
-                disabled={!connected || !state.editForm.driveFolderId}
+                disabled={!connected || !state.editForm.driveFolderId || !state.editForm.nickname?.trim()}
               >
                 Save
               </button>
