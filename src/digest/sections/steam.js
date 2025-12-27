@@ -25,18 +25,30 @@ export const buildSteamSection = (events) => {
   const snapshotEvents = events.filter(e => e.eventType === 'steam_game_snapshot');
   const achievementEvents = events.filter(e => e.eventType === 'steam_achievement_unlocked');
 
-  // Parse all games from snapshot events (one event per game)
-  const games = [];
-  let snapshotDate = null;
-  
+  // Group snapshots by date to avoid showing multiple days
+  const snapshotsByDate = new Map();
   for (const evt of snapshotEvents) {
     const payload = evt.payload ?? {};
-    const playtime2Weeks = payload.playtime_2weeks || 0;
+    const snapshotDate = payload.snapshotDate;
+    if (!snapshotDate) continue;
     
-    // Track the most recent snapshot date
-    if (payload.snapshotDate && (!snapshotDate || payload.snapshotDate > snapshotDate)) {
-      snapshotDate = payload.snapshotDate;
+    if (!snapshotsByDate.has(snapshotDate)) {
+      snapshotsByDate.set(snapshotDate, []);
     }
+    snapshotsByDate.get(snapshotDate).push(evt);
+  }
+
+  // Get the most recent snapshot date (prefer latest)
+  const sortedDates = [...snapshotsByDate.keys()].sort().reverse();
+  const latestSnapshotDate = sortedDates[0];
+  const snapshotsToUse = latestSnapshotDate ? snapshotsByDate.get(latestSnapshotDate) : [];
+
+  // Parse games from the selected snapshot date only
+  const games = [];
+  
+  for (const evt of snapshotsToUse) {
+    const payload = evt.payload ?? {};
+    const playtime2Weeks = payload.playtime_2weeks || 0;
     
     if (playtime2Weeks > 0) {
       games.push({
@@ -114,7 +126,7 @@ export const buildSteamSection = (events) => {
       gamesPlayed: games.length,
       achievementsUnlocked: achievementEvents.length,
       achievementSummary,
-      snapshotDate, // Date of the snapshot
+      snapshotDate: latestSnapshotDate, // Date of the snapshot being displayed
     },
     topGames,
     achievements,
