@@ -165,11 +165,24 @@ ul {
   vertical-align: middle;
 }
 
+/* Header logo responsive styling */
+.header-logo {
+  height: 48px;
+  display: inline-block;
+}
+
 /* Reduce horizontal padding on mobile devices */
 @media (max-width: 768px) {
   .hero-body {
     padding-left: 0.75rem;
     padding-right: 0.75rem;
+    padding-top: 0.75rem;
+  }
+  
+  .header-logo {
+    width: 100%;
+    height: auto;
+    max-width: 100%;
   }
   
   .container {
@@ -192,5 +205,10 @@ ul {
   .columns.is-multiline > .column {
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
+  }
+  
+  /* Add extra spacing between weather and menu icons on mobile */
+  .columns.is-multiline > .column:nth-child(3) {
+    padding-top: 1.5rem;
   }
 }

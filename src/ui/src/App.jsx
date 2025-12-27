@@ -116,7 +116,9 @@ const startOfDay = (date) => {
 };
 
 const formatDateLabel = (date) => {
-  return date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  const dayMonth = date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const year = date.getFullYear();
+  return { dayMonth, year };
 };
 
 const formatDateISO = (date) => {
@@ -343,28 +345,40 @@ function App() {
               <div className="mb-4">
                 {/* Three column header that stacks on mobile */}
                 <div className="columns is-mobile is-multiline">
-                  {/* Column 1: Header and collection status */}
-                  <div className="column is-12-mobile is-4-tablet has-text-centered">
-                    <img src={logoFull} alt="Evidence Journal" style={{ height: '24px', display: 'inline-block' }} />
-                    <p className="is-size-7 has-text-grey mb-1">{state.user.displayName || 'friend'}</p>
-                    {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
-                      <p className="is-size-7 has-text-grey">
-                        Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
-                        {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
-                      </p>
-                    ) : collectorStatus?.currentRunning ? (
-                      <p className="is-size-7 has-text-grey">
-                        Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
-                      </p>
-                    ) : null}
+                  {/* Column 1: Header */}
+                  <div className="column is-12-mobile is-4-tablet has-text-centered mb-1">
+                    <img src={logoFull} alt="Evidence Journal" className="header-logo" style={{ marginBottom: '0.25rem' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                      <p className="is-size-7 has-text-grey mb-0">{state.user.displayName || 'friend'}</p>
+                      <button
+                        className="button is-small is-light"
+                        title="Logout"
+                        aria-label="Logout"
+                        onClick={async () => {
+                          try {
+                            await fetch('/api/logout', { method: 'POST', credentials: 'include' });
+                          } catch (e) {
+                            /* ignore */
+                          }
+                          setState({ loading: false, user: null, error: null });
+                          // navigate home
+                          window.history.pushState({}, '', '/');
+                          setPath('/');
+                        }}
+                      >
+                        <span className="icon">
+                          <i className="fa-solid fa-right-from-bracket" />
+                        </span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Column 2: Date selector with weather */}
-                  <div className="column is-12-mobile is-4-tablet has-text-centered">
-                    <div className="buttons is-centered">
+                  <div className="column is-12-mobile is-4-tablet has-text-centered mb-1">
+                    <div className="buttons is-centered" style={{ alignItems: 'center' }}>
                       <button
                         ref={leftButtonRef}
-                        className="button is-small is-dark"
+                        className="button is-medium is-dark"
                         onClick={() => setOffsetDays((d) => d - 1)}
                         title="Previous day"
                       >
@@ -374,11 +388,23 @@ function App() {
                       </button>
                       <div style={{ position: 'relative' }}>
                         <button
-                          className="button is-light is-small"
+                          className="button is-light"
                           onClick={() => setShowCalendar(!showCalendar)}
                           title="Click to open calendar"
+                          style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center',
+                            padding: '0.5rem 1rem',
+                            height: 'auto'
+                          }}
                         >
-                          {selectedDateLabel}
+                          <div style={{ fontSize: '1.5rem', fontWeight: 600, lineHeight: 1.2 }}>
+                            {selectedDateLabel.dayMonth}
+                          </div>
+                          <div style={{ fontSize: '1rem', fontWeight: 600, lineHeight: 1.2 }}>
+                            {selectedDateLabel.year}
+                          </div>
                         </button>
                         {showCalendar && (
                           <div
@@ -414,14 +440,14 @@ function App() {
                         )}
 
                         {weather ? (
-                          <div style={{ marginTop: '0.125rem', textAlign: 'center' }}>
+                          <div style={{ marginTop: '-0.25rem', textAlign: 'center' }}>
                             <p className="is-size-7 has-text-grey">{weather.weather_description} · {weather.temperature_c}°C ({cToF(weather.temperature_c)}°F)</p>
                           </div>
                         ) : null}
                       </div>
                       <button
                         ref={rightButtonRef}
-                        className="button is-small is-dark"
+                        className="button is-medium is-dark"
                         onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
                         disabled={offsetDays >= 0}
                         title="Next day"
@@ -523,27 +549,19 @@ function App() {
                         <i className="fa-solid fa-cog" />
                       </span>
                     </a>
-                    <button
-                      className="button is-small is-light"
-                      title="Logout"
-                      aria-label="Logout"
-                      onClick={async () => {
-                        try {
-                          await fetch('/api/logout', { method: 'POST', credentials: 'include' });
-                        } catch (e) {
-                          /* ignore */
-                        }
-                        setState({ loading: false, user: null, error: null });
-                        // navigate home
-                        window.history.pushState({}, '', '/');
-                        setPath('/');
-                      }}
-                    >
-                      <span className="icon">
-                        <i className="fa-solid fa-right-from-bracket" />
-                      </span>
-                    </button>
                     </div>
+                    
+                    {/* Collection status - centered beneath navigation buttons */}
+                    {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
+                      <p className="is-size-7 has-text-grey mt-2">
+                        Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
+                        {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
+                      </p>
+                    ) : collectorStatus?.currentRunning ? (
+                      <p className="is-size-7 has-text-grey mt-2">
+                        Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -586,7 +604,7 @@ function App() {
                 ) : (
                   <div {...swipeHandlers} style={{ touchAction: 'pan-y' }}>
                     {path === '/journal' ? (
-                      <Journal date={selectedDateISO} dateLabel={selectedDateLabel} />
+                      <Journal date={selectedDateISO} dateLabel={`${selectedDateLabel.dayMonth}, ${selectedDateLabel.year}`} />
                     ) : (
                       <Digest offsetDays={offsetDays} onWeather={setWeather} />
                     )}
