@@ -355,6 +355,21 @@ function App() {
                     <img src={logoFull} alt="Evidence Journal" className="header-logo" style={{ marginBottom: '0.25rem' }} />
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
                       <p className="is-size-7 has-text-grey mb-0">{state.user.displayName || 'friend'}</p>
+                      <a
+                        href="/settings"
+                        className={`button is-small ${path === '/settings' ? 'is-dark' : 'is-light'}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          window.history.pushState({}, '', '/settings');
+                          setPath('/settings');
+                        }}
+                        title="Settings"
+                        aria-pressed={path === '/settings'}
+                      >
+                        <span className="icon">
+                          <i className="fa-solid fa-cog" />
+                        </span>
+                      </a>
                       <button
                         className="button is-small is-light"
                         title="Logout"
@@ -469,7 +484,7 @@ function App() {
                   <div className="column is-12-mobile is-4-tablet has-text-centered">
                     <div className="buttons is-centered">
                     <button
-                      className={`button is-small ${path === '/' ? 'is-dark' : 'is-light'}`}
+                      className={`button ${path === '/' ? 'is-dark' : 'is-light'}`}
                       title="Digest"
                       aria-label="Digest"
                       aria-pressed={path === '/'}
@@ -491,7 +506,7 @@ function App() {
                       </span>
                     </button>
                     <button
-                      className={`button is-small ${path === '/journal' ? 'is-dark' : 'is-light'}`}
+                      className={`button ${path === '/journal' ? 'is-dark' : 'is-light'}`}
                       title="Journal"
                       aria-label="Journal"
                       aria-pressed={path === '/journal'}
@@ -505,68 +520,58 @@ function App() {
                         <i className="fa-solid fa-pen-to-square" />
                       </span>
                     </button>
-                    <CollectorControls onStatusChange={setCollectorStatus} />
-                    <button
-                      className={`button is-small is-light${sendState.sending ? ' is-loading' : ''}`}
-                      title="Send digest"
-                      aria-label="Send digest"
-                      onClick={async () => {
-                        setSendState({ sending: true, message: null, error: null });
-                        try {
-                          // compute window for currently selected date
-                          const todayStart = startOfDay(new Date());
-                          const start = new Date(todayStart.getTime() + offsetDays * DAY_MS);
-                          const end = offsetDays === 0 ? new Date() : new Date(start.getTime() + DAY_MS);
-
-                          const res = await fetch('/api/digest/send', {
-                            method: 'POST',
-                            credentials: 'include',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ since: start.toISOString(), until: end.toISOString() }),
-                          });
-                          if (!res.ok) {
-                            const body = await res.json().catch(() => ({}));
-                            throw new Error(body.error || `Send failed (${res.status})`);
-                          }
-                          setSendState({ sending: false, message: 'Sent!', error: null });
-                          setTimeout(() => setSendState((prev) => ({ ...prev, message: null })), 2500);
-                        } catch (err) {
-                          setSendState({ sending: false, message: null, error: err.message });
-                        }
-                      }}
-                    >
-                      <span className="icon">
-                        <i className="fa-solid fa-envelope" />
-                      </span>
-                    </button>
-                    <a
-                      href="/settings"
-                      className={`button is-small ${path === '/settings' ? 'is-dark' : 'is-light'}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        window.history.pushState({}, '', '/settings');
-                        setPath('/settings');
-                      }}
-                      title="Settings"
-                      aria-pressed={path === '/settings'}
-                    >
-                      <span className="icon">
-                        <i className="fa-solid fa-cog" />
-                      </span>
-                    </a>
                     </div>
                     
-                    {/* Collection status - centered beneath navigation buttons */}
-                    {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
-                      <p className="is-size-7 has-text-grey mt-2">
-                        Last collection: {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleString()}
-                        {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
-                      </p>
-                    ) : collectorStatus?.currentRunning ? (
-                      <p className="is-size-7 has-text-grey mt-2">
-                        Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
-                      </p>
-                    ) : null}
+                    {/* Collection status with action buttons */}
+                    <div className="mt-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
+                        <p className="is-size-7 has-text-grey mb-0">
+                          <span className="icon" style={{ marginRight: '0.25rem' }}>
+                            <i className="fa-solid fa-clock" />
+                          </span>
+                          {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                          {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
+                        </p>
+                      ) : collectorStatus?.currentRunning ? (
+                        <p className="is-size-7 has-text-grey mb-0">
+                          Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
+                        </p>
+                      ) : null}
+                      <CollectorControls onStatusChange={setCollectorStatus} />
+                      <button
+                        className={`button is-small is-light${sendState.sending ? ' is-loading' : ''}`}
+                        title="Send digest"
+                        aria-label="Send digest"
+                        onClick={async () => {
+                          setSendState({ sending: true, message: null, error: null });
+                          try {
+                            // compute window for currently selected date
+                            const todayStart = startOfDay(new Date());
+                            const start = new Date(todayStart.getTime() + offsetDays * DAY_MS);
+                            const end = offsetDays === 0 ? new Date() : new Date(start.getTime() + DAY_MS);
+
+                            const res = await fetch('/api/digest/send', {
+                              method: 'POST',
+                              credentials: 'include',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ since: start.toISOString(), until: end.toISOString() }),
+                            });
+                            if (!res.ok) {
+                              const body = await res.json().catch(() => ({}));
+                              throw new Error(body.error || `Send failed (${res.status})`);
+                            }
+                            setSendState({ sending: false, message: 'Sent!', error: null });
+                            setTimeout(() => setSendState((prev) => ({ ...prev, message: null })), 2500);
+                          } catch (err) {
+                            setSendState({ sending: false, message: null, error: err.message });
+                          }
+                        }}
+                      >
+                        <span className="icon">
+                          <i className="fa-solid fa-envelope" />
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
