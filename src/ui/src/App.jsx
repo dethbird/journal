@@ -5,6 +5,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import Digest from './components/Digest';
 import Journal from './components/Journal';
+import Atlas from './components/Atlas';
 import Settings from './components/Settings';
 import { CONNECT_PROVIDERS } from './constants';
 import logoFull from './assets/logo/logo-full.png';
@@ -520,6 +521,21 @@ function App() {
                         <i className="fa-solid fa-pen-to-square" />
                       </span>
                     </button>
+                    <button
+                      className={`button ${path === '/atlas' ? 'is-dark' : 'is-light'}`}
+                      title="Atlas"
+                      aria-label="Atlas"
+                      aria-pressed={path === '/atlas'}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        window.history.pushState({}, '', '/atlas');
+                        setPath('/atlas');
+                      }}
+                    >
+                      <span className="icon">
+                        <i className="fa-solid fa-compass" />
+                      </span>
+                    </button>
                     </div>
                     
                     {/* Collection status with action buttons */}
@@ -615,6 +631,8 @@ function App() {
                   <div {...swipeHandlers} style={{ touchAction: 'pan-y' }}>
                     {path === '/journal' ? (
                       <Journal date={selectedDateISO} dateLabel={`${selectedDateLabel.dayMonth}, ${selectedDateLabel.year}`} />
+                    ) : path === '/atlas' ? (
+                      <Atlas />
                     ) : (
                       <Digest offsetDays={offsetDays} onWeather={setWeather} />
                     )}
