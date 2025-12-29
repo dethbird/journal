@@ -1764,10 +1764,10 @@ app.post('/api/atlas', async (request, reply) => {
   const user = await getSessionUser(request);
   if (!user) return reply.status(401).send({ error: 'Not authenticated' });
 
-  const { title, category, embedCode, source, notes, sortOrder } = request.body;
+  const { title, category, url, source, notes, sortOrder } = request.body;
 
-  if (!title || !embedCode) {
-    return reply.status(400).send({ error: 'Title and embedCode are required' });
+  if (!title || !url || !source) {
+    return reply.status(400).send({ error: 'Title, url, and source are required' });
   }
 
   const item = await prisma.atlasItem.create({
@@ -1775,8 +1775,8 @@ app.post('/api/atlas', async (request, reply) => {
       userId: user.id,
       title,
       category: category || null,
-      embedCode,
-      source: source || null,
+      url,
+      source,
       notes: notes || null,
       sortOrder: sortOrder || 0,
     },
@@ -1794,7 +1794,7 @@ app.put('/api/atlas/:id', async (request, reply) => {
   if (!user) return reply.status(401).send({ error: 'Not authenticated' });
 
   const { id } = request.params;
-  const { title, category, embedCode, source, notes, sortOrder, updateLastReviewed } = request.body;
+  const { title, category, url, source, notes, sortOrder, updateLastReviewed } = request.body;
 
   // Verify ownership
   const existing = await prisma.atlasItem.findUnique({
@@ -1808,8 +1808,8 @@ app.put('/api/atlas/:id', async (request, reply) => {
   const updateData = {};
   if (title !== undefined) updateData.title = title;
   if (category !== undefined) updateData.category = category || null;
-  if (embedCode !== undefined) updateData.embedCode = embedCode;
-  if (source !== undefined) updateData.source = source || null;
+  if (url !== undefined) updateData.url = url;
+  if (source !== undefined) updateData.source = source;
   if (notes !== undefined) updateData.notes = notes || null;
   if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
   if (updateLastReviewed) updateData.lastReviewed = new Date();

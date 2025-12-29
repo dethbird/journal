@@ -1,5 +1,23 @@
 import React, { useState, useEffect } from 'react';
 
+// Extract Miro board ID from URL
+const extractMiroBoardId = (url) => {
+  // Match patterns like: https://miro.com/app/board/uXjVJa0SEws=/
+  const match = url.match(/miro\.com\/app\/board\/([^/?]+)/);
+  return match ? match[1] : null;
+};
+
+// Generate iframe embed code based on source
+const generateEmbedCode = (item) => {
+  if (item.source === 'miro') {
+    const boardId = extractMiroBoardId(item.url);
+    if (!boardId) return null;
+    
+    return `<iframe src="https://miro.com/app/live-embed/${boardId}/?embedMode=view_only_without_ui" allow="fullscreen; clipboard-read; clipboard-write" allowfullscreen scrolling="no" style="width: 100%; height: 600px; border: 0;"></iframe>`;
+  }
+  return null;
+};
+
 function Atlas() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -9,8 +27,8 @@ function Atlas() {
   const [formData, setFormData] = useState({
     title: '',
     category: '',
-    embedCode: '',
-    source: '',
+    url: '',
+    source: 'miro',
     notes: '',
     sortOrder: 0,
   });
@@ -40,8 +58,8 @@ function Atlas() {
     setFormData({
       title: '',
       category: '',
-      embedCode: '',
-      source: '',
+      url: '',
+      source: 'miro',
       notes: '',
       sortOrder: items.length > 0 ? Math.max(...items.map(i => i.sortOrder)) + 1 : 0,
     });
@@ -53,8 +71,8 @@ function Atlas() {
     setFormData({
       title: item.title,
       category: item.category || '',
-      embedCode: item.embedCode,
-      source: item.source || '',
+      url: item.url,
+      source: item.source,
       notes: item.notes || '',
       sortOrder: item.sortOrder,
     });
@@ -67,8 +85,8 @@ function Atlas() {
     setFormData({
       title: '',
       category: '',
-      embedCode: '',
-      source: '',
+      url: '',
+      source: 'miro',
       notes: '',
       sortOrder: 0,
     });
@@ -136,15 +154,11 @@ function Atlas() {
     <div className="container">
       <div className="box">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <div>
-            <h1 className="title">Atlas</h1>
-            <p className="subtitle">Your embedded visualizations and dashboards</p>
-          </div>
-          <button className="button is-primary" onClick={handleAdd}>
+          <h1 className="title" style={{ marginBottom: 0 }}>Atlas</h1>
+          <button className="button is-dark" onClick={handleAdd} title="Add Item">
             <span className="icon">
               <i className="fa-solid fa-plus" />
             </span>
-            <span>Add Item</span>
           </button>
         </div>
 
@@ -187,31 +201,30 @@ function Atlas() {
               </div>
 
               <div className="field">
-                <label className="label">Embed Code / URL *</label>
+                <label className="label">Miro Board URL *</label>
                 <div className="control">
-                  <textarea
-                    className="textarea"
-                    value={formData.embedCode}
-                    onChange={(e) => setFormData({ ...formData, embedCode: e.target.value })}
+                  <input
+                    className="input"
+                    type="url"
+                    value={formData.url}
+                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                     required
-                    placeholder="<iframe src='...' width='100%' height='600'></iframe>"
-                    rows="3"
+                    placeholder="https://miro.com/app/board/uXjVJa0SEws=/"
                   />
                 </div>
-                <p className="help">Paste an iframe embed code or a URL</p>
+                <p className="help">Paste the URL from your browser's address bar</p>
               </div>
 
               <div className="field">
                 <label className="label">Source</label>
                 <div className="control">
-                  <input
-                    className="input"
-                    type="text"
-                    value={formData.source}
-                    onChange={(e) => setFormData({ ...formData, source: e.target.value })}
-                    placeholder="Miro, Whimsical, FigJam, Obsidian Publish, etc."
-                  />
+                  <div className="select is-fullwidth" disabled>
+                    <select value={formData.source} disabled>
+                      <option value="miro">Miro</option>
+                    </select>
+                  </div>
                 </div>
+                <p className="help">Currently only Miro boards are supported</p>
               </div>
 
               <div className="field">
@@ -263,15 +276,36 @@ function Atlas() {
           <div>
             {items.map((item) => (
               <div key={item.id} className="box" style={{ marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                <div style={{ marginBottom: '1rem' }}>
+                  {(() => {
+                    const embedCode = generateEmbedCode(item);
+                    if (embedCode) {
+                      return <div dangerouslySetInnerHTML={{ __html: embedCode }} />;
+                    } else {
+                      return (
+                        <div className="notification is-warning is-light">
+                          <p>Unable to generate embed code for this item.</p>
+                          <p className="is-size-7">URL: {item.url}</p>
+                        </div>
+                      );
+                    }
+                  })()}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: '0.5rem' }}>
                   <div>
                     <h3 className="title is-5" style={{ marginBottom: '0.25rem' }}>
                       {item.title}
+                      {item.source && <span className="is-size-6 has-text-grey"> | via {item.source.charAt(0).toUpperCase() + item.source.slice(1)}</span>}
                     </h3>
                     <div className="tags" style={{ marginBottom: '0.5rem' }}>
                       {item.category && <span className="tag">{item.category}</span>}
-                      {item.source && <span className="tag is-light">{item.source}</span>}
                     </div>
+                    {item.notes && <p className="is-size-7 has-text-grey" style={{ marginBottom: '0.25rem' }}>{item.notes}</p>}
+                    {item.lastReviewed && (
+                      <p className="is-size-7 has-text-grey">
+                        Last reviewed: {new Date(item.lastReviewed).toLocaleDateString()}
+                      </p>
+                    )}
                   </div>
                   <div className="buttons">
                     <button className="button is-small is-light" onClick={() => handleEdit(item)} title="Edit">
@@ -279,19 +313,13 @@ function Atlas() {
                         <i className="fa-solid fa-pen" />
                       </span>
                     </button>
-                    <button className="button is-small is-danger is-light" onClick={() => handleDelete(item.id)} title="Delete">
+                    <button className="button is-small is-light" onClick={() => handleDelete(item.id)} title="Delete">
                       <span className="icon">
                         <i className="fa-solid fa-trash" />
                       </span>
                     </button>
                   </div>
                 </div>
-                {item.notes && <p className="is-size-7 has-text-grey" style={{ marginBottom: '0.5rem' }}>{item.notes}</p>}
-                {item.lastReviewed && (
-                  <p className="is-size-7 has-text-grey" style={{ marginBottom: '0.5rem' }}>
-                    Last reviewed: {new Date(item.lastReviewed).toLocaleDateString()}
-                  </p>
-                )}
               </div>
             ))}
           </div>
