@@ -1738,6 +1738,116 @@ app.delete('/api/journal', async (request, reply) => {
   }
 });
 
+// Atlas API
+
+/**
+ * GET /api/atlas
+ * Fetch all atlas items for the logged-in user
+ */
+app.get('/api/atlas', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const items = await prisma.atlasItem.findMany({
+    where: { userId: user.id },
+    orderBy: { sortOrder: 'asc' },
+  });
+
+  return { items };
+});
+
+/**
+ * POST /api/atlas
+ * Create a new atlas item
+ */
+app.post('/api/atlas', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { title, category, url, source, notes, sortOrder } = request.body;
+
+  if (!title || !url || !source) {
+    return reply.status(400).send({ error: 'Title, url, and source are required' });
+  }
+
+  const item = await prisma.atlasItem.create({
+    data: {
+      userId: user.id,
+      title,
+      category: category || null,
+      url,
+      source,
+      notes: notes || null,
+      sortOrder: sortOrder || 0,
+    },
+  });
+
+  return { item };
+});
+
+/**
+ * PUT /api/atlas/:id
+ * Update an atlas item
+ */
+app.put('/api/atlas/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+  const { title, category, url, source, notes, sortOrder, updateLastReviewed } = request.body;
+
+  // Verify ownership
+  const existing = await prisma.atlasItem.findUnique({
+    where: { id },
+  });
+
+  if (!existing || existing.userId !== user.id) {
+    return reply.status(404).send({ error: 'Atlas item not found' });
+  }
+
+  const updateData = {};
+  if (title !== undefined) updateData.title = title;
+  if (category !== undefined) updateData.category = category || null;
+  if (url !== undefined) updateData.url = url;
+  if (source !== undefined) updateData.source = source;
+  if (notes !== undefined) updateData.notes = notes || null;
+  if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+  if (updateLastReviewed) updateData.lastReviewed = new Date();
+
+  const item = await prisma.atlasItem.update({
+    where: { id },
+    data: updateData,
+  });
+
+  return { item };
+});
+
+/**
+ * DELETE /api/atlas/:id
+ * Delete an atlas item
+ */
+app.delete('/api/atlas/:id', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) return reply.status(401).send({ error: 'Not authenticated' });
+
+  const { id } = request.params;
+
+  // Verify ownership
+  const existing = await prisma.atlasItem.findUnique({
+    where: { id },
+  });
+
+  if (!existing || existing.userId !== user.id) {
+    return reply.status(404).send({ error: 'Atlas item not found' });
+  }
+
+  await prisma.atlasItem.delete({
+    where: { id },
+  });
+
+  return { success: true };
+});
+
 // Goals API
 
 /**
