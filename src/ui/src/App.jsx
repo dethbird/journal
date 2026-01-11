@@ -8,6 +8,7 @@ import Journal from './components/Journal';
 import Atlas from './components/Atlas';
 import Settings from './components/Settings';
 import { CONNECT_PROVIDERS } from './constants';
+import { clearDigestCache } from './utils/cache';
 import logoFull from './assets/logo/logo-full.png';
 import spotifyIcon from './assets/spotify.ico';
 import githubIcon from './assets/github.ico';
@@ -174,6 +175,7 @@ function App() {
   });
   
   const [collectorStatus, setCollectorStatus] = useState(null);
+  const [cacheState, setCacheState] = useState({ clearing: false, message: null });
   const [showCalendar, setShowCalendar] = useState(false);
   const [dateRange, setDateRange] = useState({ minDate: null, maxDate: null });
   const calendarRef = useRef(null);
@@ -587,6 +589,28 @@ function App() {
                           <i className="fa-solid fa-envelope" />
                         </span>
                       </button>
+                      <button
+                        className={`button is-small is-light${cacheState.clearing ? ' is-loading' : ''}`}
+                        title="Clear digest cache"
+                        aria-label="Clear digest cache"
+                        onClick={() => {
+                          setCacheState({ clearing: true, message: null });
+                          try {
+                            const clearedCount = clearDigestCache();
+                            setCacheState({ clearing: false, message: `Cleared ${clearedCount} cached day${clearedCount === 1 ? '' : 's'}` });
+                            setTimeout(() => setCacheState({ clearing: false, message: null }), 2500);
+                            // Trigger a refetch of current day by forcing component remount
+                            setOffsetDays(prev => prev);
+                          } catch (err) {
+                            setCacheState({ clearing: false, message: 'Error clearing cache' });
+                            setTimeout(() => setCacheState({ clearing: false, message: null }), 2500);
+                          }
+                        }}
+                      >
+                        <span className="icon">
+                          <i className="fa-solid fa-trash" />
+                        </span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -594,6 +618,7 @@ function App() {
                 {/* Status messages */}
                 {sendState.message ? <p className="help is-success has-text-centered">{sendState.message}</p> : null}
                 {sendState.error ? <p className="help is-danger has-text-centered">{sendState.error}</p> : null}
+                {cacheState.message ? <p className="help is-success has-text-centered">{cacheState.message}</p> : null}
               </div>
 
               <div>
