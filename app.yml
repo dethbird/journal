@@ -7,5 +7,5 @@ apps:
   interpreter: "/home/dethbird/.nvm/versions/node/v22.21.1/bin/node"
   env:
    NODE_ENV: "production"
-   NODE_PORT: 4001
+   NODE_PORT: 3200
 
