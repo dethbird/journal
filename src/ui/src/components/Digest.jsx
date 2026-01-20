@@ -146,6 +146,14 @@ const GithubSection = ({ section, inCard = false }) => {
       <p className="title is-5">
         <img src={githubIcon} alt="GitHub" className="section-icon" />
         GitHub
+        <a 
+          href="/archive/github" 
+          onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/github'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="is-pulled-right is-size-7 has-text-grey"
+          style={{ lineHeight: '2' }}
+        >
+          Archive →
+        </a>
       </p>
       {content}
     </div>
@@ -159,6 +167,14 @@ const BookmarkSection = ({ section, onDeleteBookmark }) => {
       <p className="title is-5">
         <img src={bookmarksIcon} alt="Bookmarks" className="section-icon" />
         Bookmarks ({section.count ?? 0})
+        <a 
+          href="/archive/email_bookmarks" 
+          onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/email_bookmarks'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="is-pulled-right is-size-7 has-text-grey"
+          style={{ lineHeight: '2' }}
+        >
+          Archive →
+        </a>
       </p>
       {section.items?.length ? (
         section.items.map((item) => (
@@ -227,6 +243,14 @@ const FinanceSection = ({ source }) => {
       <p className="title is-5">
         {icon && <img src={icon} alt={source.institutionName || 'Finance'} className="section-icon" />}
         {source.name}
+        <a 
+          href="/archive/finance" 
+          onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/finance'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="is-pulled-right is-size-7 has-text-grey"
+          style={{ lineHeight: '2' }}
+        >
+          Archive →
+        </a>
       </p>
       
       <div className="mb-3">
@@ -388,6 +412,14 @@ const MusicSection = ({ section, inCard = false }) => {
       <p className="title is-5">
         <img src={spotifyIcon} alt="Spotify" className="section-icon" />
         Spotify
+        <a 
+          href="/archive/spotify" 
+          onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/spotify'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="is-pulled-right is-size-7 has-text-grey"
+          style={{ lineHeight: '2' }}
+        >
+          Archive →
+        </a>
       </p>
       {content}
     </div>
@@ -454,6 +486,14 @@ const TimelineSection = ({ section, inCard = false }) => {
       <p className="title is-5">
         <img src={timelineIcon} alt="Timeline" className="section-icon" />
         Timeline
+        <a 
+          href="/archive/google_timeline" 
+          onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/google_timeline'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="is-pulled-right is-size-7 has-text-grey"
+          style={{ lineHeight: '2' }}
+        >
+          Archive →
+        </a>
       </p>
       {content}
     </div>
@@ -536,6 +576,14 @@ const TrelloSection = ({ section, inCard = false }) => {
       <p className="title is-5">
         <img src={trelloIcon} alt="Trello" className="section-icon" />
         Trello
+        <a 
+          href="/archive/trello" 
+          onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/trello'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="is-pulled-right is-size-7 has-text-grey"
+          style={{ lineHeight: '2' }}
+        >
+          Archive →
+        </a>
       </p>
       {content}
     </div>
@@ -648,6 +696,14 @@ const GamingSection = ({ section, inCard = false }) => {
       <p className="title is-5">
         <img src={steamIcon} alt="Steam" className="section-icon" />
         Steam
+        <a 
+          href="/archive/steam" 
+          onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/steam'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+          className="is-pulled-right is-size-7 has-text-grey"
+          style={{ lineHeight: '2' }}
+        >
+          Archive →
+        </a>
       </p>
       {content}
     </div>
@@ -671,6 +727,14 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
           <p className="title is-5">
             <img src={journalIcon} alt="Journal" className="section-icon" />
             Journal
+            <a 
+              href="/archive/journal" 
+              onClick={(e) => { e.preventDefault(); window.history.pushState({}, '', '/archive/journal'); window.dispatchEvent(new PopStateEvent('popstate')); }}
+              className="is-pulled-right is-size-7 has-text-grey"
+              style={{ lineHeight: '2' }}
+            >
+              Archive →
+            </a>
           </p>
           {logs && logs.length > 0 ? (
             <div className="journal-logs">

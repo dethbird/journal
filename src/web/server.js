@@ -14,6 +14,13 @@ import prisma from '../lib/prismaClient.js';
 import buildDigestViewModel from '../digest/viewModel.js';
 import { renderEmailHtml } from '../digest/renderers/email.js';
 import { renderTextDigest } from '../digest/renderers/text.js';
+import buildGithubSection from '../digest/sections/github.js';
+import buildBookmarksSection from '../digest/sections/bookmarks.js';
+import buildSpotifySection from '../digest/sections/spotify.js';
+import buildSteamSection from '../digest/sections/steam.js';
+import buildTimelineSection from '../digest/sections/timeline.js';
+import buildTrelloSection from '../digest/sections/trello.js';
+import buildFinanceSection from '../digest/sections/finance.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1166,7 +1173,12 @@ app.get('/api/events/date-range', async (request, reply) => {
   }
 
   try {
+    const { source } = request.query;
+    
+    const whereClause = source ? { source } : {};
+    
     const result = await prisma.event.aggregate({
+      where: whereClause,
       _min: {
         occurredAt: true,
       },
@@ -1186,6 +1198,208 @@ app.get('/api/events/date-range', async (request, reply) => {
   } catch (error) {
     request.log.error(error, 'Failed to fetch date range');
     return reply.status(500).send({ error: 'Failed to fetch date range' });
+  }
+});
+
+/**
+ * GET /api/archive/:source?year=2025
+ * Fetch archive data for a specific source, grouped by day
+ * Returns all data for the year (no pagination)
+ */
+app.get('/api/archive/:source', async (request, reply) => {
+  const userId = verifySession(request.cookies?.journal_auth);
+  if (!userId) {
+    return reply.status(401).send({ error: 'Unauthorized' });
+  }
+
+  const { source } = request.params;
+  const { year } = request.query;
+
+  if (!year || !/^\d{4}$/.test(year)) {
+    return reply.status(400).send({ error: 'year query param required (YYYY format)' });
+  }
+
+  const yearNum = parseInt(year, 10);
+  const startOfYear = new Date(Date.UTC(yearNum, 0, 1, 0, 0, 0, 0));
+  const endOfYear = new Date(Date.UTC(yearNum, 11, 31, 23, 59, 59, 999));
+
+  try {
+    const events = await prisma.event.findMany({
+      where: {
+        source,
+        occurredAt: {
+          gte: startOfYear,
+          lte: endOfYear,
+        },
+      },
+      orderBy: { occurredAt: 'desc' },
+      include: { enrichments: true },
+    });
+
+    if (!events.length) {
+      return {
+        year: yearNum,
+        source,
+        totalDays: 0,
+        days: [],
+      };
+    }
+
+    // Group events by day
+    const dayMap = new Map();
+    
+    for (const evt of events) {
+      const date = new Date(evt.occurredAt);
+      const dateKey = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+      
+      if (!dayMap.has(dateKey)) {
+        dayMap.set(dateKey, {
+          date: dateKey,
+          events: [],
+        });
+      }
+      dayMap.get(dateKey).events.push(evt);
+    }
+
+    // Convert to array and sort by date descending (most recent first)
+    const days = Array.from(dayMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+
+    // Build sections for each day based on source
+    for (const day of days) {
+      let section = null;
+      
+      switch (source) {
+        case 'spotify':
+          section = buildSpotifySection(day.events);
+          break;
+        case 'github':
+          section = buildGithubSection(day.events);
+          break;
+        case 'steam':
+          section = buildSteamSection(day.events);
+          break;
+        case 'google_timeline':
+          section = buildTimelineSection(day.events);
+          break;
+        case 'trello':
+          section = buildTrelloSection(day.events);
+          break;
+        case 'email_bookmarks':
+          section = buildBookmarksSection(day.events);
+          break;
+        case 'finance':
+          section = buildFinanceSection(day.events);
+          break;
+        default:
+          section = { kind: source, events: day.events };
+      }
+      
+      day.section = section;
+      delete day.events; // Don't send raw events to client
+    }
+
+    return {
+      year: yearNum,
+      source,
+      totalDays: days.length,
+      days,
+    };
+  } catch (error) {
+    request.log.error(error, 'Failed to fetch archive');
+    return reply.status(500).send({ error: 'Failed to fetch archive' });
+  }
+});
+
+/**
+ * GET /api/archive/journal?year=2025
+ * Fetch journal archive (logs + goals) grouped by day
+ * Returns all data for the year (no pagination)
+ */
+app.get('/api/archive/journal', async (request, reply) => {
+  const user = await getSessionUser(request);
+  if (!user) {
+    return reply.status(401).send({ error: 'Not authenticated' });
+  }
+
+  const { year } = request.query;
+
+  if (!year || !/^\d{4}$/.test(year)) {
+    return reply.status(400).send({ error: 'year query param required (YYYY format)' });
+  }
+
+  const yearNum = parseInt(year, 10);
+  const startOfYear = new Date(yearNum, 0, 1, 0, 0, 0, 0);
+  const endOfYear = new Date(yearNum, 11, 31, 23, 59, 59, 999);
+
+  try {
+    // Fetch all logs for the year
+    const logs = await prisma.journalLog.findMany({
+      where: {
+        userId: user.id,
+        date: {
+          gte: startOfYear,
+          lte: endOfYear,
+        },
+      },
+      orderBy: { date: 'desc' },
+    });
+
+    // Fetch all goals for the year
+    const goals = await prisma.goal.findMany({
+      where: {
+        userId: user.id,
+        date: {
+          gte: startOfYear,
+          lte: endOfYear,
+        },
+      },
+      orderBy: [{ date: 'desc' }, { sortOrder: 'asc' }],
+    });
+
+    // Group by day
+    const dayMap = new Map();
+    
+    for (const log of logs) {
+      const dateKey = log.date.toISOString().split('T')[0];
+      if (!dayMap.has(dateKey)) {
+        dayMap.set(dateKey, { date: dateKey, logs: [], goals: [] });
+      }
+      dayMap.get(dateKey).logs.push({
+        id: log.id,
+        content: log.content,
+        createdAt: log.createdAt.toISOString(),
+      });
+    }
+
+    for (const goal of goals) {
+      const dateKey = goal.date.toISOString().split('T')[0];
+      if (!dayMap.has(dateKey)) {
+        dayMap.set(dateKey, { date: dateKey, logs: [], goals: [] });
+      }
+      dayMap.get(dateKey).goals.push({
+        id: goal.id,
+        text: goal.text,
+        completed: goal.completed,
+        sortOrder: goal.sortOrder,
+      });
+    }
+
+    // Sort logs within each day by createdAt ascending (oldest first)
+    for (const day of dayMap.values()) {
+      day.logs.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    }
+
+    // Convert to array and sort by date descending (most recent first)
+    const days = Array.from(dayMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+
+    return {
+      year: yearNum,
+      totalDays: days.length,
+      days,
+    };
+  } catch (error) {
+    request.log.error(error, 'Failed to fetch journal archive');
+    return reply.status(500).send({ error: 'Failed to fetch journal archive' });
   }
 });
 
