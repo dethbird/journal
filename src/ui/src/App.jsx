@@ -7,6 +7,7 @@ import Digest from './components/Digest';
 import Journal from './components/Journal';
 import Atlas from './components/Atlas';
 import Settings from './components/Settings';
+import Archive from './components/Archive';
 import { CONNECT_PROVIDERS } from './constants';
 import { clearDigestCache } from './utils/cache';
 import logoFull from './assets/logo/logo-full.png';
@@ -650,6 +651,14 @@ function App() {
                         /* ignore */
                       }
                       setState({ loading: false, user: null, error: null });
+                    }}
+                  />
+                ) : path.startsWith('/archive/') ? (
+                  <Archive
+                    source={path.replace('/archive/', '')}
+                    onBack={() => {
+                      setPath('/');
+                      window.history.pushState({}, '', '/');
                     }}
                   />
                 ) : (
