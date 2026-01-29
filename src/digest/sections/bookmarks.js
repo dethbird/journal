@@ -25,6 +25,9 @@ export const buildBookmarksSection = (events) => {
     const excerpt = readability?.excerpt ?? payload.raw?.snippet ?? payload.snippet ?? null;
     const imageUrl = readability?.lead_image_url ?? readability?.image ?? null;
     
+    // Extract comment text from the first link
+    const commentText = payload.links?.[0]?.text ?? null;
+    
     // Extract domain from enrichment site or parse from URL
     let sourceDomain = readability?.site ?? null;
     if (!sourceDomain && url) {
@@ -41,6 +44,7 @@ export const buildBookmarksSection = (events) => {
       url,
       excerpt,
       imageUrl,
+      commentText,
       from: payload.from ?? null,
       sourceDomain,
       occurredAt: evt.occurredAt instanceof Date ? evt.occurredAt.toISOString() : evt.occurredAt,

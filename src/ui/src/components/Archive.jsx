@@ -164,6 +164,11 @@ const BookmarkDaySection = ({ section, date }) => {
               {item.title}
             </a>
             {item.excerpt ? <p className="is-size-7 mt-1">{item.excerpt}</p> : null}
+            {item.commentText ? (
+              <p className="is-size-7 mt-1 has-text-grey-dark" style={{ fontStyle: 'italic' }}>
+                {item.commentText}
+              </p>
+            ) : null}
             {item.sourceDomain ? (
               <p className="is-size-7 has-text-grey mt-1">via {item.sourceDomain}</p>
             ) : null}

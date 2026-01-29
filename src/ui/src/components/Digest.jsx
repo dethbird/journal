@@ -194,8 +194,13 @@ const BookmarkSection = ({ section, onDeleteBookmark }) => {
                   {item.title}
                 </a>
                 {item.excerpt ? <p className="is-size-7 mt-2">{item.excerpt}</p> : null}
+                {item.commentText ? (
+                  <p className="is-size-6 mt-2 has-text-grey-dark" style={{ fontStyle: 'italic' }}>
+                    {item.commentText}
+                  </p>
+                ) : null}
                 {item.occurredAt || item.sourceDomain ? (
-                  <p className="is-size-7 has-text-grey mt-2">
+                  <p className="is-size-7 has-text-grey mt-2" style={{ textAlign: 'right' }}>
                     {item.occurredAt ? new Date(item.occurredAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : ''}
                     {item.sourceDomain ? ` · via ${item.sourceDomain}` : ''}
                     {item.id && onDeleteBookmark ? (
