@@ -27,13 +27,52 @@ const extractLinks = (text) => {
   const links = [];
   const regex = /https?:\/\/[^\s<>"]+/gi;
   let match;
+  const processedUrls = new Set();
+  
   while ((match = regex.exec(text)) !== null) {
     const url = match[0].replace(/[),.;]+$/, '');
-    if (!links.includes(url)) {
-      links.push(url);
+    
+    // Skip duplicate URLs
+    if (processedUrls.has(url)) {
+      continue;
     }
+    processedUrls.add(url);
+    
+    // Find the position after this URL in the text
+    const urlEndIndex = match.index + match[0].length;
+    
+    // Extract text after the URL until next URL or end of text
+    let commentText = null;
+    let nextUrlIndex = text.length;
+    
+    // Look for the next URL to know where comments end
+    const remainingText = text.slice(urlEndIndex);
+    const nextUrlMatch = /https?:\/\/[^\s<>"]+/i.exec(remainingText);
+    if (nextUrlMatch) {
+      nextUrlIndex = urlEndIndex + nextUrlMatch.index;
+    }
+    
+    // Extract the comment section between this URL and the next (or end)
+    const commentSection = text.slice(urlEndIndex, nextUrlIndex).trim();
+    
+    if (commentSection) {
+      // Clean up the comment text - remove extra whitespace and line breaks
+      commentText = commentSection
+        .replace(/\s+/g, ' ') // Replace multiple whitespace with single space
+        .replace(/^\s*[\r\n]+\s*/g, '') // Remove leading newlines
+        .replace(/\s*[\r\n]+\s*$/g, '') // Remove trailing newlines
+        .trim();
+      
+      // If after cleaning there's no meaningful text, set to null
+      if (!commentText || commentText.length === 0) {
+        commentText = null;
+      }
+    }
+    
+    links.push({ url, text: commentText });
   }
-  return links.map((url) => ({ url, text: null }));
+  
+  return links;
 };
 
 const parseMessage = async (rawSource) => {

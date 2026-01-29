@@ -52,6 +52,7 @@ const renderBookmarks = (section) => {
           ${item.imageUrl ? `<div class="thumb"><img src="${escapeHtml(item.imageUrl)}" alt=""/></div>` : ''}
           <div class="title"><a href="${escapeHtml(item.url)}">${escapeHtml(item.title)}</a></div>
           ${item.excerpt ? `<div class="excerpt">${escapeHtml(item.excerpt)}</div>` : ''}
+          ${item.commentText ? `<div class="comment" style="font-style: italic; color: #666; margin: 8px 0;">${escapeHtml(item.commentText)}</div>` : ''}
           ${savedLine}
         </div>
       `;

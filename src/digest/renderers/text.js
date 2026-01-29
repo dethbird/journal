@@ -33,6 +33,9 @@ const renderBookmarks = (section) => {
     if (item.excerpt) {
       lines.push(`  ${item.excerpt}`);
     }
+    if (item.commentText) {
+      lines.push(`  💬 ${item.commentText}`);
+    }
   }
   return lines;
 };
