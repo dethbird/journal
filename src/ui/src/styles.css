@@ -49,8 +49,22 @@ ul {
   white-space: normal;
 }
 
-/* Video embeds in journal entries */
+/* Media embeds in journal entries */
 .journal-video-embed {
+  display: block;
+  max-width: 100%;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+
+iframe.journal-video-embed {
+  max-width: 560px;
+  height: 315px;
+}
+
+.journal-image-embed {
   display: block;
   max-width: 100%;
   height: auto;
@@ -58,7 +72,7 @@ ul {
   margin: 12px 0;
 }
 
-/* Responsive video containers */
+/* Responsive media containers */
 .journal-entry video,
 .content video {
   max-width: 100%;
@@ -68,6 +82,12 @@ ul {
 .journal-entry iframe,
 .content iframe {
   max-width: 100%;
+}
+
+.journal-entry img,
+.content img {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Stack scope tags on smaller screens */

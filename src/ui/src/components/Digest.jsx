@@ -12,7 +12,7 @@ import amexIcon from '../assets/amex.ico';
 import chimeIcon from '../assets/chime.ico';
 import chaseIcon from '../assets/chase.ico';
 import { marked } from 'marked';
-import { processVideoEmbeds } from '../utils/videoEmbed';
+import { processMediaEmbeds } from '../utils/videoEmbed';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -747,7 +747,7 @@ const JournalSection = ({ logs, goals, onToggleGoal }) => {
               {logs.map((log) => (
                 <div key={log.id} className="mb-3">
                   <p className="is-size-7 has-text-grey mb-1">{formatLogTime(log.createdAt)}</p>
-                  <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(processVideoEmbeds(log.content || '')) }} />
+                  <div className="journal-entry content" dangerouslySetInnerHTML={{ __html: marked(processMediaEmbeds(log.content || '')) }} />
                 </div>
               ))}
             </div>

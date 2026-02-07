@@ -1,6 +1,6 @@
 /**
- * Video embedding utilities for journal entries
- * Detects video URLs and converts them to HTML embeds
+ * Media embedding utilities for journal entries
+ * Detects video and image URLs and converts them to HTML embeds
  */
 
 /**
@@ -36,6 +36,14 @@ const isDirectVideoUrl = (url) => {
 };
 
 /**
+ * Check if URL is a direct image file
+ */
+const isDirectImageUrl = (url) => {
+  const imageExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)(\?.*)?$/i;
+  return imageExtensions.test(url);
+};
+
+/**
  * Check if URL is a YouTube URL
  */
 const isYouTubeUrl = (url) => {
@@ -53,36 +61,43 @@ const isVimeoUrl = (url) => {
  * Generate HTML5 video embed for direct video URLs
  */
 const generateVideoEmbed = (url) => {
-  return `<video controls class="journal-video-embed" style="max-width: 100%; height: auto; border-radius: 6px; margin: 12px 0;">
+  return `<video controls class="journal-video-embed">
   <source src="${url}" type="video/mp4">
   Your browser does not support the video tag.
 </video>`;
 };
 
 /**
+ * Generate image embed for direct image URLs
+ */
+const generateImageEmbed = (url) => {
+  return `<img src="${url}" alt="" class="journal-image-embed" />`;
+};
+
+/**
  * Generate YouTube embed iframe
  */
 const generateYouTubeEmbed = (videoId) => {
-  return `<iframe class="journal-video-embed" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="width: 100%; max-width: 560px; height: 315px; border-radius: 6px; margin: 12px 0;"></iframe>`;
+  return `<iframe class="journal-video-embed" src="https://www.youtube.com/embed/${videoId}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
 };
 
 /**
  * Generate Vimeo embed iframe
  */
 const generateVimeoEmbed = (videoId) => {
-  return `<iframe class="journal-video-embed" src="https://player.vimeo.com/video/${videoId}" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen style="width: 100%; max-width: 560px; height: 315px; border-radius: 6px; margin: 12px 0;"></iframe>`;
+  return `<iframe class="journal-video-embed" src="https://player.vimeo.com/video/${videoId}" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
 };
 
 /**
- * Process content and convert video URLs to embeds
+ * Process content and convert video and image URLs to embeds
  * @param {string} content - Raw markdown content
- * @returns {string} - Content with video URLs converted to embeds
+ * @returns {string} - Content with media URLs converted to embeds
  */
-export const processVideoEmbeds = (content) => {
+export const processMediaEmbeds = (content) => {
   if (!content) return content;
 
-  // Check if content already has video/iframe tags (already embedded)
-  if (/<video|<iframe/i.test(content)) {
+  // Check if content already has video/iframe/img tags (already embedded)
+  if (/<video|<iframe|<img/i.test(content)) {
     return content; // Don't process if already has embeds
   }
 
@@ -90,17 +105,22 @@ export const processVideoEmbeds = (content) => {
   const urlPattern = /(https?:\/\/[^\s<>"]+)/gi;
   
   return content.replace(urlPattern, (url) => {
-    // Check if this URL is part of a markdown link [text](url)
+    // Check if this URL is part of a markdown link/image [text](url) or ![alt](url)
     // If so, don't convert it to embed
     const beforeUrl = content.substring(0, content.indexOf(url));
-    if (/\[[^\]]*\]\($/.test(beforeUrl.slice(-50))) {
-      return url; // It's part of a markdown link, leave it
+    if (/!?\[[^\]]*\]\($/.test(beforeUrl.slice(-50))) {
+      return url; // It's part of a markdown link/image, leave it
     }
 
     // Check if URL is already in an HTML tag
     const contextBefore = beforeUrl.slice(-20);
     if (/<[^>]*$/.test(contextBefore)) {
       return url; // Already in an HTML tag
+    }
+
+    // Direct image file
+    if (isDirectImageUrl(url)) {
+      return generateImageEmbed(url);
     }
 
     // Direct video file
@@ -124,9 +144,9 @@ export const processVideoEmbeds = (content) => {
       }
     }
 
-    // Not a video URL, return as-is
+    // Not a media URL, return as-is
     return url;
   });
 };
 
-export default processVideoEmbeds;
+export default processMediaEmbeds;
