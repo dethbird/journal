@@ -49,6 +49,27 @@ ul {
   white-space: normal;
 }
 
+/* Video embeds in journal entries */
+.journal-video-embed {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  margin: 12px 0;
+}
+
+/* Responsive video containers */
+.journal-entry video,
+.content video {
+  max-width: 100%;
+  height: auto;
+}
+
+.journal-entry iframe,
+.content iframe {
+  max-width: 100%;
+}
+
 /* Stack scope tags on smaller screens */
 @media (max-width: 1200px) {
   .scope-tags {

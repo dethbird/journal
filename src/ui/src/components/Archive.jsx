@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { marked } from 'marked';
+import { processVideoEmbeds } from '../utils/videoEmbed';
 import trelloIcon from '../assets/trello.ico';
 import githubIcon from '../assets/github.ico';
 import goalsIcon from '../assets/goals.ico';
@@ -349,7 +350,7 @@ const JournalDaySection = ({ logs, goals, date }) => {
           <p className="has-text-weight-semibold is-size-7 mb-2">Logs</p>
           {logs.map((log) => (
             <div key={log.id} className="content is-size-7 mb-3">
-              <div dangerouslySetInnerHTML={{ __html: marked(log.content) }} />
+              <div dangerouslySetInnerHTML={{ __html: marked(processVideoEmbeds(log.content)) }} />
               <p className="has-text-grey is-size-7">
                 {new Date(log.createdAt).toLocaleTimeString(undefined, { 
                   hour: 'numeric', 
