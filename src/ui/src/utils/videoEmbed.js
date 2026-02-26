@@ -101,21 +101,24 @@ export const processMediaEmbeds = (content) => {
     return content; // Don't process if already has embeds
   }
 
-  // Find all URLs in the content
-  const urlPattern = /(https?:\/\/[^\s<>"]+)/gi;
+  // Find all URLs in the content — also match spaces within URLs (e.g. filenames with spaces)
+  const urlPattern = /(https?:\/\/[^\s<>"]*(?:[ \t][^\s<>"]+)*)/gi;
   
-  return content.replace(urlPattern, (url) => {
+  return content.replace(urlPattern, (rawUrl, _p1, offset) => {
+    // Percent-encode any spaces or tabs in the URL
+    const url = rawUrl.replace(/[ \t]/g, (m) => m === '\t' ? '%09' : '%20');
+
     // Check if this URL is part of a markdown link/image [text](url) or ![alt](url)
     // If so, don't convert it to embed
-    const beforeUrl = content.substring(0, content.indexOf(url));
+    const beforeUrl = content.substring(0, offset);
     if (/!?\[[^\]]*\]\($/.test(beforeUrl.slice(-50))) {
-      return url; // It's part of a markdown link/image, leave it
+      return rawUrl; // It's part of a markdown link/image, leave it
     }
 
     // Check if URL is already in an HTML tag
     const contextBefore = beforeUrl.slice(-20);
     if (/<[^>]*$/.test(contextBefore)) {
-      return url; // Already in an HTML tag
+      return rawUrl; // Already in an HTML tag
     }
 
     // Direct image file
@@ -144,8 +147,8 @@ export const processMediaEmbeds = (content) => {
       }
     }
 
-    // Not a media URL, return as-is
-    return url;
+    // Not a media URL, return as-is (return rawUrl to preserve original spacing)
+    return rawUrl;
   });
 };
 
