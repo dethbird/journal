@@ -72,6 +72,13 @@ iframe.journal-video-embed {
   margin: 12px 0;
 }
 
+.journal-audio-embed {
+  display: block;
+  width: 100%;
+  max-width: 560px;
+  margin: 12px 0;
+}
+
 /* Responsive media containers */
 .journal-entry video,
 .content video {

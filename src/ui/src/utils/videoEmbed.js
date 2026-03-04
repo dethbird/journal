@@ -44,6 +44,31 @@ const isDirectImageUrl = (url) => {
 };
 
 /**
+ * Check if URL is a direct audio file
+ */
+const isDirectAudioUrl = (url) => {
+  const audioExtensions = /\.(mp3|wav|flac|aac|m4a|opus|oga)(\?.*)?$/i;
+  return audioExtensions.test(url);
+};
+
+/**
+ * Get MIME type for an audio URL
+ */
+const getAudioMimeType = (url) => {
+  const ext = (url.match(/\.(mp3|wav|flac|aac|m4a|opus|oga)(?:\?.*)?$/i) || [])[1]?.toLowerCase();
+  switch (ext) {
+    case 'mp3':  return 'audio/mpeg';
+    case 'wav':  return 'audio/wav';
+    case 'flac': return 'audio/flac';
+    case 'aac':  return 'audio/aac';
+    case 'm4a':  return 'audio/mp4';
+    case 'opus': return 'audio/ogg; codecs=opus';
+    case 'oga':  return 'audio/ogg';
+    default:     return 'audio/mpeg';
+  }
+};
+
+/**
  * Check if URL is a YouTube URL
  */
 const isYouTubeUrl = (url) => {
@@ -65,6 +90,17 @@ const generateVideoEmbed = (url) => {
   <source src="${url}" type="video/mp4">
   Your browser does not support the video tag.
 </video>`;
+};
+
+/**
+ * Generate HTML5 audio embed for direct audio URLs
+ */
+const generateAudioEmbed = (url) => {
+  const mimeType = getAudioMimeType(url);
+  return `<audio controls class="journal-audio-embed">
+  <source src="${url}" type="${mimeType}">
+  Your browser does not support the audio tag.
+</audio>`;
 };
 
 /**
@@ -96,8 +132,8 @@ const generateVimeoEmbed = (videoId) => {
 export const processMediaEmbeds = (content) => {
   if (!content) return content;
 
-  // Check if content already has video/iframe/img tags (already embedded)
-  if (/<video|<iframe|<img/i.test(content)) {
+  // Check if content already has video/iframe/img/audio tags (already embedded)
+  if (/<video|<iframe|<img|<audio/i.test(content)) {
     return content; // Don't process if already has embeds
   }
 
@@ -129,6 +165,11 @@ export const processMediaEmbeds = (content) => {
     // Direct video file
     if (isDirectVideoUrl(url)) {
       return generateVideoEmbed(url);
+    }
+
+    // Direct audio file
+    if (isDirectAudioUrl(url)) {
+      return generateAudioEmbed(url);
     }
 
     // YouTube
