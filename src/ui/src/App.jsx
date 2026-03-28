@@ -114,6 +114,7 @@ const CollectorControls = ({ onStatusChange }) => {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_FUTURE_OFFSET_DAYS = 7;
 
 const startOfDay = (date) => {
   const d = new Date(date);
@@ -292,7 +293,7 @@ function App() {
         setOffsetDays((d) => d - 1);
       } else if (event.key === 'ArrowRight') {
         event.preventDefault();
-        setOffsetDays((d) => Math.min(d + 1, 0));
+        setOffsetDays((d) => Math.min(d + 1, MAX_FUTURE_OFFSET_DAYS));
       }
     };
 
@@ -327,8 +328,8 @@ function App() {
   // Swipe handlers for touch devices
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
-      // Swipe left = next day (increment offset, but not past today)
-      setOffsetDays((d) => Math.min(d + 1, 0));
+      // Swipe left = next day (increment offset, but not past today + 7)
+      setOffsetDays((d) => Math.min(d + 1, MAX_FUTURE_OFFSET_DAYS));
     },
     onSwipedRight: () => {
       // Swipe right = previous day (decrement offset)
@@ -454,10 +455,11 @@ function App() {
                                 setShowCalendar(false);
                               }}
                               minDate={dateRange.minDate}
-                              maxDate={dateRange.maxDate || new Date()}
+                              maxDate={(() => { const max = new Date(todayStart.getTime() + MAX_FUTURE_OFFSET_DAYS * DAY_MS); return dateRange.maxDate ? new Date(Math.min(dateRange.maxDate.getTime(), max.getTime())) : max; })()}
                               tileDisabled={({ date }) => {
-                                if (!dateRange.minDate || !dateRange.maxDate) return true;
-                                return date < dateRange.minDate || date > (dateRange.maxDate > new Date() ? new Date() : dateRange.maxDate);
+                                if (!dateRange.minDate) return true;
+                                const maxFuture = new Date(todayStart.getTime() + MAX_FUTURE_OFFSET_DAYS * DAY_MS);
+                                return date < dateRange.minDate || date > maxFuture;
                               }}
                             />
                           </div>
@@ -472,8 +474,8 @@ function App() {
                       <button
                         ref={rightButtonRef}
                         className="button is-medium is-dark"
-                        onClick={() => setOffsetDays((d) => Math.min(d + 1, 0))}
-                        disabled={offsetDays >= 0}
+                        onClick={() => setOffsetDays((d) => Math.min(d + 1, MAX_FUTURE_OFFSET_DAYS))}
+                        disabled={offsetDays >= MAX_FUTURE_OFFSET_DAYS}
                         title="Next day"
                       >
                         <span className="icon">

@@ -801,6 +801,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
     const { start, end } = buildWindow(offsetDays);
     const dateISO = formatDateISO(start);
     const isToday = offsetDays === 0;
+    const isFuture = offsetDays > 0;
     const cacheKey = `digest-${dateISO}`;
 
     const load = async () => {
@@ -808,6 +809,22 @@ export default function Digest({ offsetDays = 0, onWeather }) {
         setState({ loading: true, error: null, vm: null });
         setLogs([]);
         setGoals([]);
+
+        // Future dates: only fetch goals, no digest/logs, no cache
+        if (isFuture) {
+          const goalsRes = await fetch(`/api/goals?date=${dateISO}`, { credentials: 'include' });
+          let goalsData = [];
+          if (goalsRes.ok) {
+            const gd = await goalsRes.json();
+            goalsData = gd.goals || [];
+          }
+          if (!cancelled) {
+            setState({ loading: false, error: null, vm: { sections: [], window: { start, end }, weather: null } });
+            setGoals(goalsData);
+            if (onWeather) onWeather(null);
+          }
+          return;
+        }
 
         // Check cache for past days (not today)
         if (!isToday) {
@@ -983,6 +1000,9 @@ export default function Digest({ offsetDays = 0, onWeather }) {
   const { vm } = state;
   if (!vm) return null;
 
+  const isFuture = offsetDays > 0;
+  const dimmedStyle = isFuture ? { opacity: 0.3, pointerEvents: 'none', userSelect: 'none' } : undefined;
+
   return (
     <div key={offsetDays}>
       {/* Journal entry at the top if present */}
@@ -991,7 +1011,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
       </AnimatedSection>
       
       {/* removed Digest header box; weather is lifted to App */}
-      {!vm.sections?.length && logs.length === 0 && goals.length === 0 && (
+      {!isFuture && !vm.sections?.length && logs.length === 0 && goals.length === 0 && (
         <AnimatedSection delay={0.1}>
           <div className="box">
             <p className="has-text-grey mt-3">No events in this window.</p>
@@ -1014,7 +1034,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
           return (
             <>
               <AnimatedSection delay={delayCounter}>
-                <div className="columns is-multiline">
+                <div style={dimmedStyle} className="columns is-multiline">
                   <div className="column is-12-mobile is-6-desktop">
                     {github ? (
                       <GithubSection section={github} />
@@ -1045,7 +1065,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
               </AnimatedSection>
 
               <AnimatedSection delay={delayCounter + 0.1}>
-                <div className="columns is-multiline">
+                <div style={dimmedStyle} className="columns is-multiline">
                   <div className="column is-12-mobile is-6-desktop">
                     {music ? (
                       <MusicSection section={music} />
@@ -1076,7 +1096,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
               </AnimatedSection>
 
               <AnimatedSection delay={delayCounter + 0.2}>
-                <div className="columns is-multiline">
+                <div style={dimmedStyle} className="columns is-multiline">
                   <div className="column is-12-mobile is-6-desktop">
                     {timeline ? (
                       <TimelineSection section={timeline} />
@@ -1112,7 +1132,7 @@ export default function Digest({ offsetDays = 0, onWeather }) {
               {/* Finance Sources - one section per source */}
               {finance?.sources?.length > 0 && (
                 <AnimatedSection delay={delayCounter + 0.3}>
-                  <div className="columns is-multiline">
+                  <div style={dimmedStyle} className="columns is-multiline">
                     {finance.sources.map((source, idx) => (
                       <div key={source.sourceId || idx} className="column is-12-mobile is-6-desktop">
                         <FinanceSection source={source} />
