@@ -116,6 +116,19 @@ const CollectorControls = ({ onStatusChange }) => {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_FUTURE_OFFSET_DAYS = 7;
 
+const timeAgo = (date) => {
+  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  const diffMs = date - Date.now();
+  const diffSec = Math.round(diffMs / 1000);
+  const diffMin = Math.round(diffSec / 60);
+  const diffHr = Math.round(diffMin / 60);
+  const diffDay = Math.round(diffHr / 24);
+  if (Math.abs(diffSec) < 60) return rtf.format(diffSec, 'second');
+  if (Math.abs(diffMin) < 60) return rtf.format(diffMin, 'minute');
+  if (Math.abs(diffHr) < 24) return rtf.format(diffHr, 'hour');
+  return rtf.format(diffDay, 'day');
+};
+
 const startOfDay = (date) => {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -546,17 +559,33 @@ function App() {
                     {/* Collection status with action buttons */}
                     <div className="mt-2" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       {!collectorStatus?.currentRunning && collectorStatus?.recentRuns?.[0] ? (
-                        <p className="is-size-7 has-text-grey mb-0">
-                          <span className="icon" style={{ marginRight: '0.25rem' }}>
-                            <i className="fa-solid fa-clock" />
-                          </span>
-                          {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, {new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
-                          {collectorStatus.recentRuns[0].eventCount > 0 && ` (${collectorStatus.recentRuns[0].eventCount} events)`}
-                        </p>
+                        (() => {
+                          const runDate = new Date(collectorStatus.recentRuns[0].finishedAt || collectorStatus.recentRuns[0].startedAt);
+                          const count = collectorStatus.recentRuns[0].eventCount;
+                          return (
+                            <p
+                              className="is-size-7 has-text-grey mb-0"
+                              title={runDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                            >
+                              <span className="icon" style={{ marginRight: '0.25rem' }}>
+                                <i className="fa-solid fa-clock" />
+                              </span>
+                              {timeAgo(runDate)}{count > 0 ? ` (${count} events)` : ''}
+                            </p>
+                          );
+                        })()
                       ) : collectorStatus?.currentRunning ? (
-                        <p className="is-size-7 has-text-grey mb-0">
-                          Collection running... (started {new Date(collectorStatus.currentRunning.startedAt).toLocaleTimeString()})
-                        </p>
+                        (() => {
+                          const startDate = new Date(collectorStatus.currentRunning.startedAt);
+                          return (
+                            <p
+                              className="is-size-7 has-text-grey mb-0"
+                              title={startDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+                            >
+                              Collection running... (started {timeAgo(startDate)})
+                            </p>
+                          );
+                        })()
                       ) : null}
                       <CollectorControls onStatusChange={setCollectorStatus} />
                       <button
