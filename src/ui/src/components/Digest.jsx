@@ -1023,11 +1023,11 @@ export default function Digest({ offsetDays = 0, onWeather }) {
         (() => {
           const github = vm.sections?.find((s) => s.kind === 'github') ?? null;
           const trello = vm.sections?.find((s) => s.kind === 'trello') ?? null;
+          const bookmarks = vm.sections?.find((s) => s.kind === 'bookmarks') ?? null;
           const music = vm.sections?.find((s) => s.kind === 'music') ?? null;
           const gaming = vm.sections?.find((s) => s.kind === 'gaming') ?? null;
           const timeline = vm.sections?.find((s) => s.kind === 'timeline') ?? null;
           const finance = vm.sections?.find((s) => s.kind === 'finance') ?? null;
-          const other = (vm.sections || []).filter((s) => !['github', 'trello', 'music', 'gaming', 'timeline', 'finance'].includes(s.kind));
 
           let delayCounter = 0.1;
 
@@ -1067,6 +1067,19 @@ export default function Digest({ offsetDays = 0, onWeather }) {
               <AnimatedSection delay={delayCounter + 0.1}>
                 <div style={dimmedStyle} className="columns is-multiline">
                   <div className="column is-12-mobile is-6-desktop">
+                    {bookmarks ? (
+                      <BookmarkSection section={bookmarks} onDeleteBookmark={handleDeleteBookmark} />
+                    ) : (
+                      <div className="box">
+                        <p className="title is-5">
+                          <img src={bookmarksIcon} alt="Bookmarks" className="section-icon" />
+                          Bookmarks
+                        </p>
+                        <p className="has-text-grey">No bookmarks saved</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="column is-12-mobile is-6-desktop">
                     {music ? (
                       <MusicSection section={music} />
                     ) : (
@@ -1079,6 +1092,11 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                       </div>
                     )}
                   </div>
+                </div>
+              </AnimatedSection>
+
+              <AnimatedSection delay={delayCounter + 0.2}>
+                <div style={dimmedStyle} className="columns is-multiline">
                   <div className="column is-12-mobile is-6-desktop">
                     {gaming ? (
                       <GamingSection section={gaming} />
@@ -1092,11 +1110,6 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                       </div>
                     )}
                   </div>
-                </div>
-              </AnimatedSection>
-
-              <AnimatedSection delay={delayCounter + 0.2}>
-                <div style={dimmedStyle} className="columns is-multiline">
                   <div className="column is-12-mobile is-6-desktop">
                     {timeline ? (
                       <TimelineSection section={timeline} />
@@ -1109,22 +1122,6 @@ export default function Digest({ offsetDays = 0, onWeather }) {
                         <p className="has-text-grey">No timeline events</p>
                       </div>
                     )}
-                  </div>
-                  <div className="column is-12-mobile is-6-desktop">
-                    {(() => {
-                      const bookmarks = vm.sections?.find((s) => s.kind === 'bookmarks') ?? null;
-                      return bookmarks ? (
-                        <BookmarkSection section={bookmarks} onDeleteBookmark={handleDeleteBookmark} />
-                      ) : (
-                        <div className="box">
-                          <p className="title is-5">
-                            <img src={bookmarksIcon} alt="Bookmarks" className="section-icon" />
-                            Bookmarks
-                          </p>
-                          <p className="has-text-grey">No bookmarks saved</p>
-                        </div>
-                      );
-                    })()}
                   </div>
                 </div>
               </AnimatedSection>
