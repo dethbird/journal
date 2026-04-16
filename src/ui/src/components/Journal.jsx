@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import gsap from 'gsap';
+import TextareaAutosize from 'react-textarea-autosize';
 
 const formatTime = (iso) => {
   if (!iso) return '';
@@ -306,9 +307,9 @@ export default function Journal({ date, dateLabel }) {
             <div key={log.id} className="box mb-3" style={{ backgroundColor: '#fefcf9', borderLeft: '3px solid #e8b963' }}>
               {editingLogId === log.id ? (
                 <div>
-                  <textarea
-                    className="textarea is-small mb-2"
-                    rows={4}
+                  <TextareaAutosize
+                    className="textarea mb-2"
+                    minRows={4}
                     value={editingLogContent}
                     onChange={(e) => setEditingLogContent(e.target.value)}
                     autoFocus
